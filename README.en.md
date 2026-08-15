@@ -40,6 +40,14 @@ auto-switching between the local working directory and the SSH remote directory.
 
 ![Left Pane](docs/左栏.png)
 
+**🔍 Watch paths (auto-open scope)**: by default only the FIRST level is watched (files directly under
+the root and its first-level dirs). Click the **dot** on a directory row to switch: **amber** = watch the
+next level of this directory, **green** = watch ALL levels (n) under it, click again to reset; marks are
+remembered per session. A rule explainer box sits in the tab bar (right of Files / Changes / >_). Build
+artifacts, temp files and lockfiles NEVER pop regardless of marks.
+
+![Watch Paths](docs/监视路径.png)
+
 ### 📊 Status Bar
 
 The bottom status bar shows the workspace state.
@@ -81,9 +89,13 @@ with truncated titles.
 
 Built-in command-line terminal: "▶ Run" executes the current file directly (python / node / bash etc.),
 ">_ Terminal" opens a command panel for ad-hoc commands (both run remotely in SSH mode); a standalone
-terminal entry also lives on the file tab bar.
+terminal entry also lives on the file tab bar. The terminal docks at the BOTTOM FIFTH of the chat column
+in a faithful terminal look (SimHei font, macOS traffic-light dots, ❯ prompt, green caret) without
+overlapping the conversation.
 
 ![Terminal](docs/命令行展示.png)
+
+![Terminal Docked](docs/终端.png)
 
 ### 📜 Log Preview
 
