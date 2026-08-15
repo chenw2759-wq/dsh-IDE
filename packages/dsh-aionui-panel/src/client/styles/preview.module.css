@@ -612,39 +612,41 @@
   box-shadow: inset 0 0 0 1px var(--aion-primary);
 }
 
-/* ── syntax highlight palette (dark theme, Trae-style) ───────────────────── */
+/* ── syntax highlight palette (theme-aware, Trae-style) ──────────────────── */
 /* highlight.js emits GLOBAL classes (hljs-keyword etc.), so each must escape
-   CSS-module scoping with :global() or the hashed selector never matches. */
+   CSS-module scoping with :global() or the hashed selector never matches.
+   Colors are CSS variables: the light theme override at the bottom of this
+   file swaps the whole palette for high-contrast-on-light values. */
 .codeHighlight :global(.hljs-comment),
-.codeHighlight :global(.hljs-quote) { color: #7f9f7f; font-style: italic; }
+.codeHighlight :global(.hljs-quote) { color: var(--hljs-comment, #7f9f7f); font-style: italic; }
 .codeHighlight :global(.hljs-keyword),
 .codeHighlight :global(.hljs-selector-tag),
 .codeHighlight :global(.hljs-literal),
 .codeHighlight :global(.hljs-section),
-.codeHighlight :global(.hljs-doctag) { color: #c678dd; }
+.codeHighlight :global(.hljs-doctag) { color: var(--hljs-keyword, #c678dd); }
 .codeHighlight :global(.hljs-string),
 .codeHighlight :global(.hljs-regexp),
-.codeHighlight :global(.hljs-addition) { color: #98c379; }
+.codeHighlight :global(.hljs-addition) { color: var(--hljs-string, #98c379); }
 .codeHighlight :global(.hljs-number),
 .codeHighlight :global(.hljs-symbol),
 .codeHighlight :global(.hljs-bullet),
 .codeHighlight :global(.hljs-variable),
 .codeHighlight :global(.hljs-template-variable),
-.codeHighlight :global(.hljs-link) { color: #d19a66; }
+.codeHighlight :global(.hljs-link) { color: var(--hljs-number, #d19a66); }
 .codeHighlight :global(.hljs-title),
 .codeHighlight :global(.hljs-title.function_),
 .codeHighlight :global(.hljs-title.class_),
-.codeHighlight :global(.hljs-name) { color: #61afef; }
+.codeHighlight :global(.hljs-name) { color: var(--hljs-title, #61afef); }
 .codeHighlight :global(.hljs-attr),
 .codeHighlight :global(.hljs-attribute),
 .codeHighlight :global(.hljs-property),
-.codeHighlight :global(.hljs-params) { color: #e06c75; }
+.codeHighlight :global(.hljs-params) { color: var(--hljs-attr, #e06c75); }
 .codeHighlight :global(.hljs-built_in),
 .codeHighlight :global(.hljs-type),
-.codeHighlight :global(.hljs-class .hljs-title) { color: #e5c07b; }
+.codeHighlight :global(.hljs-class .hljs-title) { color: var(--hljs-built, #e5c07b); }
 .codeHighlight :global(.hljs-meta),
-.codeHighlight :global(.hljs-meta .hljs-keyword) { color: #56b6c2; }
-.codeHighlight :global(.hljs-deletion) { color: #e06c75; }
+.codeHighlight :global(.hljs-meta .hljs-keyword) { color: var(--hljs-meta, #56b6c2); }
+.codeHighlight :global(.hljs-deletion) { color: var(--hljs-deletion, #e06c75); }
 .codeHighlight :global(.hljs-emphasis) { font-style: italic; }
 .codeHighlight :global(.hljs-strong) { font-weight: bold; }
 
@@ -1122,4 +1124,90 @@
   padding: 6px 20px;
   background: color-mix(in srgb, var(--aion-warning) 10%, transparent);
   flex-shrink: 0;
+}
+
+/* ── zoom wrapper (image / HTML previews) ─────────────────────────────────── */
+.zoomWrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.zoomBar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--aion-bg-3, #333);
+  background: var(--aion-bg-1);
+  flex: 0 0 auto;
+}
+
+.zoomBtn {
+  min-width: 24px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--aion-bg-3, #333);
+  border-radius: 5px;
+  background: var(--aion-bg-2, #222);
+  color: var(--aion-text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.zoomBtn:hover {
+  border-color: var(--aion-primary);
+}
+
+.zoomPct {
+  min-width: 44px;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--aion-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.zoomBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+  display: flex;
+}
+
+/* HTML preview iframe inside the zoom wrapper. */
+.htmlFrame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #fff;
+}
+
+/* ── light-theme highlight palette (GitHub-light-ish, high contrast) ────────
+   The shell marks the theme with inline `color-scheme: dark|light` on <html>;
+   CSS-module files keep :root / html selectors global, so this override works
+   wherever the module's style tag lands. */
+:root {
+  --hljs-comment: #7f9f7f;
+  --hljs-keyword: #c678dd;
+  --hljs-string: #98c379;
+  --hljs-number: #d19a66;
+  --hljs-title: #61afef;
+  --hljs-attr: #e06c75;
+  --hljs-built: #e5c07b;
+  --hljs-meta: #56b6c2;
+  --hljs-deletion: #e06c75;
+}
+
+html[style*="color-scheme: light"] {
+  --hljs-comment: #6e7781;
+  --hljs-keyword: #cf222e;
+  --hljs-string: #0a3069;
+  --hljs-number: #0550ae;
+  --hljs-title: #8250df;
+  --hljs-attr: #953800;
+  --hljs-built: #0550ae;
+  --hljs-meta: #0550ae;
+  --hljs-deletion: #cf222e;
 }

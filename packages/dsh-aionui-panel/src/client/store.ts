@@ -168,7 +168,7 @@ export interface LayoutState {
   previewOpen: boolean
   /** Where the preview/editor region sits: below the tree, a side drawer, or
    *  a floating pane that overlays the chat area. */
-  previewMode: 'bottom' | 'side' | 'float'
+  previewMode: PreviewLayoutMode
   /** Measured available width of the [content | panels] row. */
   availableWidth: number
   /** True while a panel drag is in flight (disables transitions). */
@@ -183,14 +183,18 @@ export interface LayoutStore extends StateHandle<LayoutState> {
   previewWidthPx: (state: LayoutState) => number
   /** Persist a clamped shrink when the stored width no longer fits. */
   shrinkToFit: (state: LayoutState) => void
-  /** Cycle where the preview sits: bottom → side → float → bottom. */
+  /** Cycle where the preview sits: bottom → side → float → triple → bottom. */
   cyclePreviewMode: () => void
   /** Set the preview mode explicitly. */
-  setPreviewMode: (mode: 'bottom' | 'side' | 'float') => void
+  setPreviewMode: (mode: 'bottom' | 'side' | 'float' | 'triple') => void
 }
 
 /** Storage key of the preview-mode preference (global, not per-root). */
 export const KEY_PREVIEW_MODE = 'aionui-preview-mode'
+
+/** All preview layout modes (bottom pane / right drawer / floating / triple IDE). */
+export const PREVIEW_MODES = ['bottom', 'side', 'float', 'triple'] as const
+export type PreviewLayoutMode = (typeof PREVIEW_MODES)[number]
 
 /** Storage key of the collapse preference for one root. */
 export const collapseKey = (root: string): string => `${KEY_COLLAPSE}${root}`
@@ -203,7 +207,7 @@ export function createLayoutStore(): LayoutStore {
     previewWidth: readStoredNumber(KEY_PREVIEW_WIDTH, MIN_PREVIEW_PANEL_PX, MAX_PREVIEW_REGION_PX, DEFAULT_PREVIEW_REGION_PX),
     explorerCollapsed: false,
     previewOpen: false,
-    previewMode: (['bottom', 'side', 'float'] as const)[readStoredNumber(KEY_PREVIEW_MODE, 0, 2, 0)] ?? 'bottom',
+    previewMode: PREVIEW_MODES[readStoredNumber(KEY_PREVIEW_MODE, 0, PREVIEW_MODES.length - 1, 0)] ?? 'bottom',
     availableWidth: 0,
     dragging: false,
   })
@@ -230,14 +234,13 @@ export function createLayoutStore(): LayoutStore {
       }
     },
     cyclePreviewMode(): void {
-      const order: Array<'bottom' | 'side' | 'float'> = ['bottom', 'side', 'float']
-      const next = order[(order.indexOf(handle.getSnapshot().previewMode) + 1) % order.length]
+      const next = PREVIEW_MODES[(PREVIEW_MODES.indexOf(handle.getSnapshot().previewMode) + 1) % PREVIEW_MODES.length]
       handle.update((prev) => (prev.previewMode === next ? prev : { ...prev, previewMode: next }))
-      writeStoredNumber(KEY_PREVIEW_MODE, order.indexOf(next))
+      writeStoredNumber(KEY_PREVIEW_MODE, PREVIEW_MODES.indexOf(next))
     },
-    setPreviewMode(mode: 'bottom' | 'side' | 'float'): void {
+    setPreviewMode(mode: 'bottom' | 'side' | 'float' | 'triple'): void {
       handle.update((prev) => (prev.previewMode === mode ? prev : { ...prev, previewMode: mode }))
-      writeStoredNumber(KEY_PREVIEW_MODE, (['bottom', 'side', 'float'] as const).indexOf(mode))
+      writeStoredNumber(KEY_PREVIEW_MODE, PREVIEW_MODES.indexOf(mode))
     },
   })
   return store
@@ -283,6 +286,8 @@ export interface ExplorerState {
   }
   /** Bumped on every fs change event (drives refetch + re-render). */
   version: number
+  /** Git status per rel path ('' = not a change): A/M/D/R/U/C — tree badges. */
+  git: Record<string, string>
 }
 
 /** The explorer store with its async actions. */
@@ -296,6 +301,8 @@ export interface ExplorerStore extends StateHandle<ExplorerState> {
   cancelSearch: () => void
   /** Refetch every expanded dir + active search after a host change event. */
   handleFsChange: () => void
+  /** Refresh the git-status badge map (call after mount / git events). */
+  refreshGitStatus: () => Promise<void>
 }
 
 /** Read the persisted explorer UI state for a root (range-guarded). */
@@ -321,6 +328,7 @@ export function createExplorerStore(api: PanelApi): ExplorerStore {
     activeTab: 'files',
     search: { ...EMPTY_SEARCH },
     version: 0,
+    git: {},
   })
 
   let persistTimer: ReturnType<typeof setTimeout> | undefined
@@ -399,9 +407,34 @@ export function createExplorerStore(api: PanelApi): ExplorerStore {
           selected: ui.selected,
           loading: [],
           search: { ...EMPTY_SEARCH },
+          git: {},
         }
       })
       void ensureDir(root, '')
+      void store.refreshGitStatus()
+    },
+    async refreshGitStatus() {
+      const root = handle.getSnapshot().root
+      if (root === '') return
+      const result = await api.gitStatus(root)
+      handle.update((prev) => {
+        if (prev.root !== root) return prev
+        if (!result.ok || result.value === null) return prev
+        const git: Record<string, string> = {}
+        const rows = [...result.value.staged, ...result.value.unstaged, ...result.value.untracked]
+        for (const row of rows) {
+          if (row.path === '') continue
+          const letter = row.state === 'created' ? 'A'
+            : row.state === 'modified' ? 'M'
+              : row.state === 'deleted' ? 'D'
+                : row.state === 'renamed' ? 'R'
+                  : row.state === 'conflicted' ? 'C'
+                    : row.state === 'untracked' ? 'U'
+                      : ''
+          if (letter !== '') git[row.path] = letter
+        }
+        return { ...prev, git }
+      })
     },
     setActiveTab(tab: 'files' | 'changes') {
       handle.update((prev) => (prev.activeTab === tab ? prev : { ...prev, activeTab: tab }))
@@ -736,6 +769,9 @@ export interface PreviewTabState {
   /** Edit-diff tabs: the LATEST disk content, kept editable alongside the
    * red/green view (saving it re-diffs the file and keeps the card alive). */
   editContent?: string
+  /** The mtime editContent was based on — the write-conflict base so a save
+   * can never clobber a NEWER disk state with stale content. */
+  editMtime?: number
   /** Image dimensions for image tabs. */
   image?: { width: number; height: number }
   dirty: boolean
@@ -765,10 +801,13 @@ export interface PreviewStore extends StateHandle<PreviewState> {
   openFile: (root: string, path: string) => void
   openDiff: (root: string, path: string, staged: boolean) => void
   /** Open a Trae-style edit diff (red deletes / green adds) for one save or
-   *  one external edit. forceBottom pins the preview to the lower pane. */
-  openEditDiff: (root: string, path: string, title: string, oldText: string, newText: string, forceBottom?: boolean) => void
+   *  one external edit. forceBottom pins the preview to the lower pane;
+   *  mtime is the baseline the newText was read at (save conflict base). */
+  openEditDiff: (root: string, path: string, title: string, oldText: string, newText: string, forceBottom?: boolean, mtime?: number) => void
   switchTab: (id: string) => void
   closeTabs: (ids: string[]) => void
+  /** Drag-reorder: move tab `id` to the position of `targetId`. */
+  moveTab: (id: string, targetId: string) => void
   updateContent: (id: string, content: string) => void
   saveTab: (id: string) => Promise<void>
   reloadTab: (id: string) => Promise<void>
@@ -888,7 +927,7 @@ export function createPreviewStore(api: PanelApi, onAutoDiff?: () => void): Prev
             ...prev,
             tabs: prev.tabs.map((item) => (
               item.id === id
-                ? { ...item, loading: false, content: lines.join('\n'), editContent: disk.value.content, error: null }
+                ? { ...item, loading: false, content: lines.join('\n'), editContent: disk.value.content, editMtime: disk.value.mtime, error: null }
                 : item
             )),
           }))
@@ -1006,16 +1045,22 @@ export function createPreviewStore(api: PanelApi, onAutoDiff?: () => void): Prev
     async openFile(root: string, path: string, asChange = false): Promise<void> {
       const type = detectContentType(path)
       const id = tabIdOf(root, path, type)
-      const existing = handle.getSnapshot().tabs.find((tab) => tab.id === id)
+      // NEVER open the same file twice in the strip: reuse any existing tab
+      // of this path (exact id, or any type/diff tab of the same file), and
+      // refresh its content in place instead of stacking a duplicate.
+      const tabs = handle.getSnapshot().tabs
+      const existing = tabs.find((tab) => tab.id === id)
+        ?? tabs.find((tab) => tab.root === root && tab.path === path && tab.diff === undefined)
+        ?? tabs.find((tab) => tab.root === root && tab.path === path)
       if (existing !== undefined) {
         handle.update((prev) => ({
           ...prev,
           root,
           open: true,
-          activeTabId: id,
-          tabs: prev.tabs.map((tab) => (tab.id === id ? { ...tab, savedAt: Date.now() } : tab)),
+          activeTabId: existing.id,
+          tabs: prev.tabs.map((tab) => (tab.id === existing.id ? { ...tab, savedAt: Date.now() } : tab)),
         }))
-        const loaded = loadContent(root, id)
+        const loaded = loadContent(root, existing.id)
         schedulePersist(handle.getSnapshot())
         return loaded
       }
@@ -1082,7 +1127,7 @@ export function createPreviewStore(api: PanelApi, onAutoDiff?: () => void): Prev
       void loadContent(root, id)
       schedulePersist(handle.getSnapshot())
     },
-    openEditDiff(root: string, path: string, title: string, oldText: string, newText: string, forceBottom = false) {
+    openEditDiff(root: string, path: string, title: string, oldText: string, newText: string, forceBottom = false, mtime?: number) {
       // Nothing changed — an empty-vs-empty diff is meaningless (and would
       // render a stray "+" row).
       if (oldText === '' && newText === '') return
@@ -1113,7 +1158,7 @@ export function createPreviewStore(api: PanelApi, onAutoDiff?: () => void): Prev
           root,
           open: true,
           activeTabId: id,
-          tabs: prev.tabs.map((tab) => (tab.id === id ? { ...tab, content, editContent: newText, savedAt: Date.now() } : tab)),
+          tabs: prev.tabs.map((tab) => (tab.id === id ? { ...tab, content, editContent: newText, editMtime: mtime, savedAt: Date.now() } : tab)),
         }))
         if (forceBottom) onAutoDiff?.()
         schedulePersist(handle.getSnapshot())
@@ -1129,6 +1174,7 @@ export function createPreviewStore(api: PanelApi, onAutoDiff?: () => void): Prev
           contentType: 'diff',
           content,
           editContent: newText,
+          editMtime: mtime,
           dirty: false,
           updated: false,
           loading: false,
@@ -1149,18 +1195,30 @@ export function createPreviewStore(api: PanelApi, onAutoDiff?: () => void): Prev
     },
     async saveEditDiff(id: string) {
       // Save the editable latest-content of an edit-diff tab back to disk.
-      // The write itself triggers an fs-change event, which re-diffs the file
-      // (red/green against the baseline) — so the diff card stays alive.
+      // The write carries the baseline mtime (editMtime): if the disk moved on
+      // since this diff card was built, the write is REJECTED — stale content
+      // must never clobber a newer edit. On conflict the card is re-read and
+      // rebuilt against the current disk state so the user edits the latest.
+      // The successful write itself triggers an fs-change event, which
+      // re-diffs the file (red/green against the baseline) — the card stays.
       const state = handle.getSnapshot()
       const tab = state.tabs.find((item) => item.id === id)
       if (tab === undefined || tab.editContent === undefined) return
-      const result = await api.write(state.root, tab.path, tab.editContent, undefined)
+      const result = await api.write(state.root, tab.path, tab.editContent, tab.editMtime)
       if (result.ok) {
         handle.update((prev) => ({
           ...prev,
-          tabs: prev.tabs.map((item) => (item.id === id ? { ...item, savedAt: Date.now() } : item)),
+          tabs: prev.tabs.map((item) => (item.id === id ? { ...item, editMtime: result.value.mtime, savedAt: Date.now() } : item)),
         }))
+        return
       }
+      // Write rejected (usually a mtime conflict): re-read the disk and rebuild
+      // the card around the LATEST content — the user's stale edit is dropped,
+      // never written over the newer disk state.
+      const fresh = await api.read(state.root, tab.path, false)
+      if (!fresh.ok) return
+      const fileTab = handle.getSnapshot().tabs.find((t) => t.root === tab.root && t.path === tab.path && t.diff === undefined)
+      this.openEditDiff(state.root, tab.path, fileTab?.title ?? tab.path, fileTab?.baseContent ?? fresh.value.content, fresh.value.content, false, fresh.value.mtime)
     },
     switchTab(id: string) {
       const state = handle.getSnapshot()
@@ -1169,6 +1227,20 @@ export function createPreviewStore(api: PanelApi, onAutoDiff?: () => void): Prev
       touch(id)
       const tab = handle.getSnapshot().tabs.find((item) => item.id === id)
       if (tab !== undefined && tab.content === null) void loadContent(state.root, id)
+      schedulePersist(handle.getSnapshot())
+    },
+    moveTab(id: string, targetId: string) {
+      if (id === targetId) return
+      handle.update((prev) => {
+        const from = prev.tabs.findIndex((item) => item.id === id)
+        const to = prev.tabs.findIndex((item) => item.id === targetId)
+        if (from < 0 || to < 0) return prev
+        const tabs = [...prev.tabs]
+        const [moved] = tabs.splice(from, 1)
+        const insertAt = tabs.findIndex((item) => item.id === targetId)
+        tabs.splice(insertAt < 0 ? tabs.length : insertAt, 0, moved)
+        return { ...prev, tabs }
+      })
       schedulePersist(handle.getSnapshot())
     },
     closeTabs(ids: string[]) {
@@ -1234,7 +1306,7 @@ export function createPreviewStore(api: PanelApi, onAutoDiff?: () => void): Prev
       // Trae-style edit diff: after a successful save, open a diff tab showing
       // exactly what changed (deleted lines red, added lines green).
       if (result.ok && baseline !== undefined && baseline !== sentContent && !sentContent.includes('\u0000')) {
-        this.openEditDiff(state.root, tab.path, tab.title, baseline, sentContent)
+        this.openEditDiff(state.root, tab.path, tab.title, baseline, sentContent, false, result.value.mtime)
       }
     },
     async reloadTab(id: string) {
@@ -1262,7 +1334,7 @@ export function createPreviewStore(api: PanelApi, onAutoDiff?: () => void): Prev
         if (result.ok) {
           const base = fileTab?.baseContent
           if (base !== undefined && base !== result.value.content) {
-            this.openEditDiff(state.root, tab.path, fileTab?.title ?? tab.path, base, result.value.content)
+            this.openEditDiff(state.root, tab.path, fileTab?.title ?? tab.path, base, result.value.content, false, result.value.mtime)
           }
         }
         return
@@ -1393,17 +1465,26 @@ export function createPreviewStore(api: PanelApi, onAutoDiff?: () => void): Prev
         const current = handle.getSnapshot().tabs.find((item) => item.id === tab.id)
         if (current === undefined || current.dirty || current.diff !== undefined) return
         const disk = result.value.content
+        // Keep the ALREADY-OPEN tab fresh in place (never stack a duplicate):
+        // its content follows the disk, so switching back to the file tab
+        // always shows the latest bytes.
+        handle.update((prev) => ({
+          ...prev,
+          tabs: prev.tabs.map((t) => (
+            t.id === tab.id ? { ...t, content: disk, mtime: result.value.mtime ?? t.mtime } : t
+          )),
+        }))
         // Fresh-write: an fs-change auto-open with NO baseline renders the
         // whole file as additions (all-green). The content read equals the
         // new disk state (disk === current.content), so the generic guard
         // would skip it — pop the all-green diff explicitly instead.
         if (current.autoOpened === true && current.baseContent === '') {
-          this.openEditDiff(state.root, tab.path, tab.title, '', disk, true)
+          this.openEditDiff(state.root, tab.path, tab.title, '', disk, true, result.value.mtime)
           return
         }
         if (disk === current.baseContent || disk === current.content) return
         // Pop the diff and pin the preview to the lower pane.
-        this.openEditDiff(state.root, tab.path, tab.title, current.baseContent ?? '', disk, true)
+        this.openEditDiff(state.root, tab.path, tab.title, current.baseContent ?? '', disk, true, result.value.mtime)
       }))
     },
     async handleGitChange(root: string) {

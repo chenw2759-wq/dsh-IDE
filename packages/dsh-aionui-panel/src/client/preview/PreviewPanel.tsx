@@ -143,6 +143,7 @@ export function PreviewPanel({ stores }: { stores: PanelStores }): JSX.Element {
         onClosePanel={() => preview.setOpen(false)}
         previewMode={layoutState.previewMode}
         onTogglePreviewMode={() => stores.layout.cyclePreviewMode()}
+        onMoveTab={(id, targetId) => preview.moveTab(id, targetId)}
       />
       {activeTab !== null && (
         <>

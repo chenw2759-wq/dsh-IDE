@@ -30,11 +30,14 @@ export function FileContextMenu({
   stores,
   api,
   onClose,
+  onRenameInline,
 }: {
   menu: FileMenuState
   stores: PanelStores
   api: PanelApi
   onClose: () => void
+  /** Request an inline rename row for the target instead of a prompt. */
+  onRenameInline?: (path: string, isDir: boolean) => void
 }): JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
   const root = stores.explorer.getSnapshot().root
@@ -60,6 +63,34 @@ export function FileContextMenu({
     void stores.explorer.handleFsChange()
   }
 
+  /** The directory new entries land in (the clicked dir, or the parent). */
+  const targetDir = (): string => {
+    if (menu.isDir) return menu.path
+    return menu.path.includes('/') ? menu.path.slice(0, menu.path.lastIndexOf('/')) : ''
+  }
+
+  const createFile = (): void => {
+    onClose()
+    const name = window.prompt(t('explorer.newFilePrompt'))
+    if (name === null || name.trim() === '') return
+    const dir = targetDir()
+    const path = dir === '' ? name.trim() : `${dir}/${name.trim()}`
+    void api.write(root, path, '').then((result) => {
+      if (result.ok) refresh()
+    })
+  }
+
+  const createFolder = (): void => {
+    onClose()
+    const name = window.prompt(t('explorer.newFolderPrompt'))
+    if (name === null || name.trim() === '') return
+    const dir = targetDir()
+    const path = dir === '' ? name.trim() : `${dir}/${name.trim()}`
+    void api.mkdir(root, path).then((result) => {
+      if (result.ok) refresh()
+    })
+  }
+
   const download = async (): Promise<void> => {
     onClose()
     if (menu.isDir || menu.path === '') return
@@ -75,6 +106,10 @@ export function FileContextMenu({
 
   const rename = (): void => {
     onClose()
+    if (onRenameInline !== undefined) {
+      onRenameInline(menu.path, menu.isDir)
+      return
+    }
     const current = menu.path.split('/').pop() ?? menu.path
     const next = window.prompt(t('explorer.renamePrompt'), current)
     if (next === null || next.trim() === '' || next.trim() === current) return
@@ -112,11 +147,18 @@ export function FileContextMenu({
 
   const style = {
     left: Math.min(menu.x, window.innerWidth - 180),
-    top: Math.min(menu.y, window.innerHeight - 220),
+    top: Math.min(menu.y, window.innerHeight - 260),
   }
 
   return (
     <div ref={ref} className={explorerCss.contextMenu} style={style}>
+      <button type="button" className={explorerCss.contextItem} onClick={createFile}>
+        📄 {t('explorer.menuNewFile')}
+      </button>
+      <button type="button" className={explorerCss.contextItem} onClick={createFolder}>
+        📁 {t('explorer.menuNewFolder')}
+      </button>
+      <div className={explorerCss.contextSep} />
       <button type="button" className={explorerCss.contextItem} onClick={() => void download()} disabled={menu.isDir || menu.path === ''}>
         ⬇ {t('explorer.menuDownload')}
       </button>

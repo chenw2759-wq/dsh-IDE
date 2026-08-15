@@ -38,6 +38,7 @@ export function PreviewTabs({
   onClosePanel,
   previewMode,
   onTogglePreviewMode,
+  onMoveTab,
 }: {
   tabs: PreviewTabState[]
   activeTabId: string | null
@@ -46,13 +47,16 @@ export function PreviewTabs({
   onContextMenu: (event: React.MouseEvent, tab: PreviewTabState) => void
   onNewUrlTab: () => void
   onClosePanel: () => void
-  /** Where the preview sits: below the tree, as a right drawer, or floating. */
-  previewMode?: 'bottom' | 'side' | 'float'
-  /** Toggle between bottom and side placement. */
+  /** Where the preview sits: bottom / side / float / triple IDE. */
+  previewMode?: 'bottom' | 'side' | 'float' | 'triple'
+  /** Toggle between the preview placements. */
   onTogglePreviewMode?: () => void
+  /** Drag-reorder a tab onto another tab's position. */
+  onMoveTab?: (id: string, targetId: string) => void
 }): JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [fade, setFade] = useState<TabFadeState>({ left: false, right: false })
+  const dragId = useRef<string | null>(null)
 
   // Overflow fades: ResizeObserver + scroll listener, setState only on change.
   useEffect(() => {
@@ -102,6 +106,25 @@ export function PreviewTabs({
             tabIndex={0}
             title={tab.path}
             aria-label={tab.title}
+            draggable={onMoveTab !== undefined}
+            onDragStart={(event) => {
+              dragId.current = tab.id
+              event.dataTransfer.effectAllowed = 'move'
+              try { event.dataTransfer.setData('text/plain', tab.id) } catch { /* some browsers throw on custom data */ }
+            }}
+            onDragEnd={() => { dragId.current = null }}
+            onDragOver={(event) => {
+              if (dragId.current === null || dragId.current === tab.id) return
+              event.preventDefault()
+              event.dataTransfer.dropEffect = 'move'
+            }}
+            onDrop={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              const source = dragId.current ?? (event.dataTransfer.getData('text/plain') || null)
+              if (source !== null && source !== tab.id) onMoveTab?.(source, tab.id)
+              dragId.current = null
+            }}
             onClick={() => onSwitch(tab.id)}
             onKeyDown={activateOnKey(() => { onSwitch(tab.id) })}
             onContextMenu={(event) => onContextMenu(event, tab)}
@@ -154,10 +177,20 @@ export function PreviewTabs({
             type="button"
             className={previewCss.panelCollapse}
             onClick={onTogglePreviewMode}
-            title={previewMode === 'bottom' ? t('preview.modeBottom') : previewMode === 'side' ? t('preview.modeSide') : t('preview.modeFloat')}
-            aria-label={previewMode === 'bottom' ? t('preview.modeBottom') : previewMode === 'side' ? t('preview.modeSide') : t('preview.modeFloat')}
+            title={
+              previewMode === 'bottom' ? t('preview.modeBottom')
+                : previewMode === 'side' ? t('preview.modeSide')
+                  : previewMode === 'float' ? t('preview.modeFloat')
+                    : t('preview.modeTriple')
+            }
+            aria-label={
+              previewMode === 'bottom' ? t('preview.modeBottom')
+                : previewMode === 'side' ? t('preview.modeSide')
+                  : previewMode === 'float' ? t('preview.modeFloat')
+                    : t('preview.modeTriple')
+            }
           >
-            {previewMode === 'bottom' ? '⇊' : previewMode === 'side' ? '⇉' : '⇱'}
+            {previewMode === 'bottom' ? '⇊' : previewMode === 'side' ? '⇉' : previewMode === 'float' ? '⇱' : '⿻'}
           </button>
         )}
         <div

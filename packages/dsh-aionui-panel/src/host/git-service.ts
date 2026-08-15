@@ -35,8 +35,17 @@ const OUTPUT_CAP_BYTES = 1 << 20
 export function subprocessRunner(ctx: Context): GitRunner {
   return {
     async run(argv, cwd) {
+      // Resolve `git` through the execution world first: the sandboxed local
+      // subprocess provider wants a canonical executable (a bare name may not
+      // be resolvable from its scrubbed PATH).
+      let gitPath = 'git'
+      try {
+        gitPath = await ctx.subprocess.resolveExecutable('git')
+      } catch {
+        // keep the bare name; the spawn below reports the real failure
+      }
       const spec: SubprocessSpawnSpec = {
-        argv: ['git', ...argv],
+        argv: [gitPath, ...argv],
         cwd,
         stdio: {
           stdin: 'ignore',

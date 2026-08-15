@@ -381,20 +381,49 @@ export class PanelLayoutController {
     const mode = state.previewMode
     const side = mode === 'side'
     const floating = mode === 'float'
+    const triple = mode === 'triple'
+
+    // Triple IDE layout: the panel column becomes TWO side-by-side columns —
+    // the file tree (explorerWidth) and the preview (previewWidth) — so the
+    // frame reads 对话 | 文件树 | 预览.
+    const tripleWidth = triple && previewOpen
+      ? Math.min(state.availableWidth > 0 ? state.availableWidth : 1200, Math.round(state.explorerWidth + state.previewWidth))
+      : panel
 
     // Four tracks: shell sidebar, center, shell details, the panel column.
     frame.style.gridTemplateColumns =
-      `${this.shellTracks[0]} minmax(0, 1fr) ${this.shellTracks[2]} ${Math.round(panel)}px`
+      `${this.shellTracks[0]} minmax(0, 1fr) ${this.shellTracks[2]} ${Math.round(tripleWidth)}px`
 
     // Preview placement: below the tree (column), as a right drawer (row),
-    // or as a floating pane overlaying the chat area (absolute, outside the
+    // as a floating pane overlaying the chat area (absolute, outside the
     // grid — the tree column keeps its full width, so the search bar never
-    // narrows while a file is open).
+    // narrows while a file is open), or as the triple-IDE right column.
     if (this.panelCol !== null) {
-      this.panelCol.style.flexDirection = side ? 'row' : 'column'
+      this.panelCol.style.flexDirection = (side || triple) ? 'row' : 'column'
+    }
+    if (this.explorerCol !== null) {
+      if (triple) {
+        this.explorerCol.style.flex = '0 0 auto'
+        this.explorerCol.style.width = `${Math.round(state.explorerWidth)}px`
+        this.explorerCol.style.borderRight = '1px solid var(--aion-bg-3, #e5e6eb)'
+      } else {
+        this.explorerCol.style.flex = '1 1 0'
+        this.explorerCol.style.width = ''
+        this.explorerCol.style.borderRight = ''
+      }
     }
     if (this.previewCol !== null) {
-      if (floating) {
+      if (triple) {
+        this.previewCol.style.position = ''
+        this.previewCol.style.flex = '1 1 0'
+        this.previewCol.style.width = ''
+        this.previewCol.style.height = ''
+        this.previewCol.style.zIndex = ''
+        this.previewCol.style.boxShadow = ''
+        this.previewCol.style.borderTop = 'none'
+        this.previewCol.style.borderLeft = '1px solid var(--aion-bg-3, #e5e6eb)'
+        this.previewCol.style.visibility = 'visible'
+      } else if (floating) {
         const width = previewOpen ? Math.round(state.previewWidth) : 0
         // Detach from the grid column: position against the frame.
         this.previewCol.style.position = 'absolute'
@@ -434,15 +463,15 @@ export class PanelLayoutController {
       }
     }
     if (this.heightHandle !== null) {
-      this.heightHandle.style.display = !floating && previewOpen ? 'block' : 'none'
+      this.heightHandle.style.display = !floating && !triple && previewOpen ? 'block' : 'none'
     }
 
     // Width handle: at the left edge of the panel column.
     const width = this.frameWidth > 0 ? this.frameWidth : frame.getBoundingClientRect().width
     if (this.widthHandle !== null) {
-      const left = Math.round(width - panel)
+      const left = Math.round(width - tripleWidth)
       this.widthHandle.style.left = `${left}px`
-      this.widthHandle.style.display = panel > 0 && state.root !== '' ? 'block' : 'none'
+      this.widthHandle.style.display = tripleWidth > 0 && state.root !== '' ? 'block' : 'none'
     }
 
     // Floating expand button: visible only when the panel is collapsed.

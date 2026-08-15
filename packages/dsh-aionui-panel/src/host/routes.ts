@@ -244,6 +244,16 @@ export function registerPanelRoutes(ctx: Context, fs: FsService, git: GitService
         json(res, 'ok' in result ? OK(result) : FAIL(result))
         return
       }
+      case '/aionui-panel/mkdir': {
+        const path = strField(payload, 'path')
+        if (path === null) {
+          json(res, FAIL(BAD_REQUEST))
+          return
+        }
+        const result = await fs.mkdir(root, path)
+        json(res, 'ok' in result ? OK(result) : FAIL(result))
+        return
+      }
       case '/aionui-panel/rename': {
         const path = strField(payload, 'path')
         const newPath = strField(payload, 'newPath')

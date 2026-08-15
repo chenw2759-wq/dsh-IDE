@@ -11,7 +11,7 @@
  * @module dsh-aionui-panel/client/components/ExplorerPanel
  */
 
-import { memo, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import type { FsEntry } from '../../core/types.ts'
 import { parentRel } from '../fileType.ts'
@@ -30,6 +30,14 @@ import '../styles/tokens.module.css'
 /** Row indent step per tree depth (px). */
 const INDENT_STEP = 16
 
+/** One row's inline-rename editing state (null = no editing row). */
+interface RenameState { path: string; isDir: boolean }
+
+/** Git badge color by letter (VS Code-ish). */
+const GIT_BADGE_COLOR: Record<string, string> = {
+  A: '#22c55e', M: '#eab308', D: '#f87171', R: '#a78bfa', U: '#94a3b8', C: '#f87171',
+}
+
 /**
  * The whole explorer column content.
  * @param stores - the panel store bundle.
@@ -46,7 +54,17 @@ export function ExplorerPanel({
   const [searchFocus, setSearchFocus] = useState(false)
   const [fileMenu, setFileMenu] = useState<FileMenuState | null>(null)
   const [terminalOpen, setTerminalOpen] = useState(false)
+  const [renaming, setRenaming] = useState<RenameState | null>(null)
   const root = state.root
+
+  // Load the git badge map once the column mounts / the root changes.
+  useEffect(() => {
+    void stores.explorer.refreshGitStatus()
+  }, [stores.explorer, root])
+
+  const startRename = (path: string, isDir: boolean): void => {
+    setRenaming({ path, isDir })
+  }
 
   return (
     <div className="aionui-root" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
@@ -96,7 +114,7 @@ export function ExplorerPanel({
             searchFocus={searchFocus}
             onFocusChange={setSearchFocus}
           />
-          <FileTree stores={stores} onContextMenu={setFileMenu} />
+          <FileTree stores={stores} onContextMenu={setFileMenu} renaming={renaming} onRenameDone={() => setRenaming(null)} />
         </div>
       )}
 
@@ -109,6 +127,7 @@ export function ExplorerPanel({
           stores={stores}
           api={stores.api}
           onClose={() => setFileMenu(null)}
+          onRenameInline={startRename}
         />
       )}
     </div>
@@ -214,12 +233,15 @@ function SearchResults({ stores }: { stores: PanelStores }): JSX.Element {
 function FileTree({
   stores,
   onContextMenu,
+  renaming,
+  onRenameDone,
 }: {
   stores: PanelStores
   onContextMenu: (menu: FileMenuState) => void
+  renaming: RenameState | null
+  onRenameDone: () => void
 }): JSX.Element {
   const explorer = stores.explorer
-  const preview = stores.preview
   const state = useStore(explorer)
   const root = state.root
 
@@ -241,8 +263,11 @@ function FileTree({
           selected={state.selected}
           dirs={state.dirs}
           root={state.root}
+          git={state.git}
+          renaming={renaming}
           stores={stores}
           onContextMenu={onContextMenu}
+          onRenameDone={onRenameDone}
         />
       ))}
     </div>
@@ -257,8 +282,11 @@ function TreeRowBase({
   selected,
   dirs,
   root,
+  git,
+  renaming,
   stores,
   onContextMenu,
+  onRenameDone,
 }: {
   entry: FsEntry
   depth: number
@@ -266,16 +294,22 @@ function TreeRowBase({
   selected: string | null
   dirs: Record<string, FsEntry[]>
   root: string
+  git: Record<string, string>
+  renaming: RenameState | null
   stores: PanelStores
   onContextMenu?: (menu: FileMenuState) => void
+  onRenameDone: () => void
 }): JSX.Element {
   const explorer = stores.explorer
   const preview = stores.preview
   const isExpanded = expanded.includes(entry.path)
   const isSelected = selected === entry.path
   const children = entry.isDir ? dirs[entry.path] : undefined
+  const isRenaming = renaming !== null && renaming.path === entry.path
+  const gitBadge = git[entry.path]
 
   const handleClick = (): void => {
+    if (isRenaming) return
     if (entry.isDir) {
       // Full-row expand/collapse toggle.
       explorer.toggleDir(entry.path)
@@ -292,33 +326,59 @@ function TreeRowBase({
     onContextMenu?.({ x: event.clientX, y: event.clientY, path: entry.path, isDir: entry.isDir })
   }
 
+  const commitRename = (nextName: string): void => {
+    const name = nextName.trim()
+    if (name === '' || name === entry.name) {
+      onRenameDone()
+      return
+    }
+    const parent = entry.path.includes('/') ? entry.path.slice(0, entry.path.lastIndexOf('/')) : ''
+    const newPath = parent === '' ? name : `${parent}/${name}`
+    void stores.api.rename(root, entry.path, newPath).then((result) => {
+      if (result.ok) {
+        explorer.handleFsChange()
+        void explorer.refreshGitStatus()
+      }
+      onRenameDone()
+    })
+  }
+
   return (
     <>
-      <div
-        className={`${explorerCss.treeRow}${isSelected ? ` ${explorerCss.treeRowSelected}` : ''}`}
-        style={{ paddingLeft: 12 + 8 + depth * INDENT_STEP }}
-        onClick={handleClick}
-        onKeyDown={activateOnKey(handleClick)}
-        onContextMenu={handleContextMenu}
-        onDoubleClick={(event) => {
-          // Double-click on a file: same as click (open). Folders: keep toggle.
-          event.stopPropagation()
-        }}
-        role="button"
-        tabIndex={0}
-        aria-expanded={entry.isDir ? isExpanded : undefined}
-        title={entry.path}
-      >
-        {entry.isDir ? (
-          <span className={`${explorerCss.treeArrow}${isExpanded ? ` ${explorerCss.treeArrowOpen}` : ''}`}>
-            <ChevronRightIcon size={13} />
-          </span>
-        ) : (
-          <span className={explorerCss.treeArrowEmpty} />
-        )}
-        <FileTypeIcon name={entry.name} isDir={entry.isDir} expanded={isExpanded} />
-        <span className={explorerCss.treeName}>{entry.name}</span>
-      </div>
+      {isRenaming ? (
+        <InlineRenameRow entry={entry} depth={depth} onCommit={commitRename} onCancel={onRenameDone} />
+      ) : (
+        <div
+          className={`${explorerCss.treeRow}${isSelected ? ` ${explorerCss.treeRowSelected}` : ''}`}
+          style={{ paddingLeft: 12 + 8 + depth * INDENT_STEP }}
+          onClick={handleClick}
+          onKeyDown={activateOnKey(handleClick)}
+          onContextMenu={handleContextMenu}
+          role="button"
+          tabIndex={0}
+          aria-expanded={entry.isDir ? isExpanded : undefined}
+          title={entry.path}
+        >
+          {entry.isDir ? (
+            <span className={`${explorerCss.treeArrow}${isExpanded ? ` ${explorerCss.treeArrowOpen}` : ''}`}>
+              <ChevronRightIcon size={13} />
+            </span>
+          ) : (
+            <span className={explorerCss.treeArrowEmpty} />
+          )}
+          <FileTypeIcon name={entry.name} isDir={entry.isDir} expanded={isExpanded} />
+          <span className={explorerCss.treeName}>{entry.name}</span>
+          {gitBadge !== undefined && (
+            <span
+              className={explorerCss.gitBadge}
+              style={{ color: GIT_BADGE_COLOR[gitBadge] ?? 'var(--aion-text-tertiary)' }}
+              title={`git: ${gitBadge}`}
+            >
+              {gitBadge}
+            </span>
+          )}
+        </div>
+      )}
       {entry.isDir && isExpanded && children !== undefined && (
         <div>
           {children.map((child) => (
@@ -330,13 +390,55 @@ function TreeRowBase({
               selected={selected}
               dirs={dirs}
               root={root}
+              git={git}
+              renaming={renaming}
               stores={stores}
               onContextMenu={onContextMenu}
+              onRenameDone={onRenameDone}
             />
           ))}
         </div>
       )}
     </>
+  )
+}
+
+/** Inline rename row: a bare input replacing the row until Enter/Escape/blur. */
+function InlineRenameRow({
+  entry,
+  depth,
+  onCommit,
+  onCancel,
+}: {
+  entry: FsEntry
+  depth: number
+  onCommit: (name: string) => void
+  onCancel: () => void
+}): JSX.Element {
+  const [value, setValue] = useState(entry.name)
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [])
+  return (
+    <div className={explorerCss.treeRow} style={{ paddingLeft: 12 + 8 + depth * INDENT_STEP }}>
+      <span className={explorerCss.treeArrowEmpty} />
+      <input
+        ref={inputRef}
+        className={explorerCss.renameInput}
+        value={value}
+        spellCheck={false}
+        onChange={(event) => setValue(event.target.value)}
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') onCommit(value)
+          else if (event.key === 'Escape') onCancel()
+          event.stopPropagation()
+        }}
+        onBlur={() => onCommit(value)}
+      />
+    </div>
   )
 }
 

@@ -16,6 +16,7 @@
 
 import { readdir, readFile, realpath, stat, writeFile, rm, mkdir, rename as renamePath, copyFile } from 'node:fs/promises'
 import { watch as watchDir, type Dirent, type FSWatcher } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { join, dirname } from 'node:path'
 import type { DirListing, FileRead, FsEntry, PanelError, SearchHit, SearchView } from '../core/types.ts'
 import { isPathInside, type GateVerdict, type WorkspaceGate } from './gate.ts'
@@ -556,7 +557,9 @@ export class FsService {
     return { query, hits, truncated }
   }
 
-  /** Delete a path (discard of untracked files). Recursive for directories. */
+  /** Delete a path (discard of untracked files). Recursive for directories.
+   *  Local Windows deletes move into the Recycle Bin (Microsoft.VisualBasic
+   *  SendToRecycleBin); remote deletes stay permanent (SFTP has no bin). */
   async delete(root: string, rel: string): Promise<{ ok: true } | PanelError> {
     const remote = this.remoteTarget(root)
     if (remote !== null) {
@@ -577,11 +580,54 @@ export class FsService {
     if (isGitPath(rel)) return { code: 'path-outside-root', message: 'refusing to touch .git' }
     const resolved = await resolveInsideRoot(gated.canonical, rel)
     if (!resolved.ok) return resolved.error
+    // Windows: recycle instead of permanent removal (the item must still
+    // exist; PowerShell receives the literal path via JSON-quoted string).
+    if (process.platform === 'win32') {
+      try {
+        const literal = JSON.stringify(resolved.abs)
+        const script = `Add-Type -AssemblyName Microsoft.VisualBasic; `
+          + `if (Test-Path -LiteralPath ${literal}) { `
+          + `$i = Get-Item -LiteralPath ${literal}; `
+          + `if ($i.PSIsContainer) { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($i.FullName, 'OnlyErrorDialogs', 'SendToRecycleBin') } `
+          + `else { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($i.FullName, 'OnlyErrorDialogs', 'SendToRecycleBin') } }`
+        execFileSync('powershell', ['-NoProfile', '-Command', script], { timeout: 20_000, stdio: 'ignore' })
+        return { ok: true }
+      } catch {
+        // fall through to the permanent rm when the recycle path fails
+      }
+    }
     try {
       await rm(resolved.abs, { recursive: true, force: true })
       return { ok: true }
     } catch {
       return { code: 'write-failed', message: `cannot delete ${rel}` }
+    }
+  }
+
+  /** Create a directory (recursive; local mkdir or remote `mkdir -p`). */
+  async mkdir(root: string, rel: string): Promise<{ ok: true } | PanelError> {
+    const remote = this.remoteTarget(root)
+    if (remote !== null) {
+      if (rel === '' || isGitPath(rel)) return { code: 'path-outside-root', message: 'refusing to create under .git' }
+      const abs = this.remoteAbs(remote.remoteRoot, rel)
+      if (abs === null) return { code: 'path-outside-root', message: 'path escapes root' }
+      try {
+        await remote.engine.exec(remote.alias, `mkdir -p ${shellQuote(abs)}`)
+        return { ok: true }
+      } catch {
+        return { code: 'write-failed', message: `cannot create ${rel}` }
+      }
+    }
+    const gated = await this.gate(root)
+    if (!gated.ok) return gated.error
+    if (rel === '' || isGitPath(rel)) return { code: 'path-outside-root', message: 'refusing to create under .git' }
+    const resolved = await resolveInsideRoot(gated.canonical, rel)
+    if (!resolved.ok) return resolved.error
+    try {
+      await mkdir(resolved.abs, { recursive: true })
+      return { ok: true }
+    } catch {
+      return { code: 'write-failed', message: `cannot create ${rel}` }
     }
   }
 

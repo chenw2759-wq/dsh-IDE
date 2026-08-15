@@ -57,9 +57,14 @@ export class PanelApi {
     return post('/aionui-panel/search', { root, query })
   }
 
-  /** Delete a path (untracked discard). */
+  /** Delete a path (local deletes go to the Recycle Bin on Windows). */
   delete(root: string, path: string): Promise<PanelEnvelope<{ ok: true }>> {
     return post('/aionui-panel/delete', { root, path })
+  }
+
+  /** Create a directory (recursive). */
+  mkdir(root: string, path: string): Promise<PanelEnvelope<{ ok: true }>> {
+    return post('/aionui-panel/mkdir', { root, path })
   }
 
   /** Rename / move a path. */

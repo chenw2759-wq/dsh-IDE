@@ -33,8 +33,10 @@ Markdown files render directly in the panel (cyan tab), switchable between three
 
 ### 🌳 Left File Tree
 
-Lazy-loaded file tree with filename search, context menu (download / rename / copy / paste / delete),
-auto-switching between the local working directory and the SSH remote directory.
+Lazy-loaded file tree with filename search, **Git status badges** (A/M/D/R/U/C), a context menu
+(**New File / New Folder** / download / **inline rename** / copy / paste / **delete to Recycle Bin**),
+auto-switching between the local working directory and the SSH remote directory. An already-open file
+**never opens twice** — external changes refresh its tab in place.
 
 ![Left Pane](docs/左栏.png)
 
@@ -46,7 +48,8 @@ The bottom status bar shows the workspace state.
 
 ### ✏️ Live Code Editing
 
-Editable code area with line numbers and zebra striping (aligned to code lines and following scroll),
+Editable code area with **colorful syntax highlighting** (Trae-style palette, **auto-switching with the
+light/dark theme**), line numbers and zebra striping (aligned to code lines and following scroll),
 Ctrl+S save with mtime conflict detection; the toolbar offers split (editor | preview), refresh, and more.
 
 ![Live Code Editing](docs/支持代码即时编辑.png)
@@ -88,23 +91,25 @@ Log files (gray tab) preview directly in the panel.
 
 ![Log Preview](docs/日志预览.png)
 
-### 🖼️ Image Preview
+### 🖼️ Image / 📋 CSV / 🌐 HTML Previews
 
-Image files preview directly (orange tab).
+- **Images** (orange tab) and **HTML** (purple tab) previews support **zoom**: toolbar − / % / + / 1:1 /
+  fit-width, or **Ctrl+wheel**
+- **CSV** data renders as a table (green tab)
 
 ![Image Preview](docs/图片预览.png)
-
-### 📋 CSV Preview
-
-CSV data renders as a table (green tab).
-
 ![CSV Preview](docs/csv预览.png)
-
-### 🌐 HTML Preview
-
-HTML files support source / preview switching (purple tab).
-
 ![HTML Preview](docs/html预览.png)
+
+### 🎚️ Drag-to-reorder Tabs + Triple-IDE Layout
+
+- Preview tabs can be **dragged to reorder**
+- Four layout modes cycle: bottom (⇊) / right drawer (⇉) / float (⇱) / **triple IDE (⿻)** — chat | files | preview side by side
+
+### 🧬 R Language Support
+
+`.R` / `.r` scripts run with **Rscript** (▶ Run), R tabs use the official R blue; `.Rmd` (R Markdown)
+renders as Markdown; syntax highlighting supports R natively.
 
 ### 🚀 SSH Remote Development (Local Brain, Remote Hands)
 

@@ -258,7 +258,13 @@ function HtmlViewer({
       </div>
     )
   }
-  return <iframe className={previewCss.pdfViewer} srcDoc={srcDoc} sandbox="" title="html preview" />
+  return (
+    <div className={previewCss.content}>
+      <Zoomable>
+        <iframe className={previewCss.htmlFrame} srcDoc={srcDoc} sandbox="" title="html preview" />
+      </Zoomable>
+    </div>
+  )
 }
 
 /** Syntax-highlighted read-only code viewer (split preview side). */
@@ -574,14 +580,72 @@ function DiffViewer({
   )
 }
 
-/** Image viewer. */
+/** Image viewer with zoom (toolbar + ctrl+wheel). */
 function ImageViewer({ src, meta }: { src: string; meta: string }): JSX.Element {
   return (
     <div className={previewCss.content}>
-      <div className={previewCss.imageViewer}>
-        <img src={src} alt="" />
-      </div>
+      <Zoomable>
+        <img src={src} alt="" style={{ display: 'block', maxWidth: 'none' }} />
+      </Zoomable>
       {meta.trim() !== '' && <div className={previewCss.imageMeta}>{meta}</div>}
+    </div>
+  )
+}
+
+/**
+ * Zoom wrapper for visual previews (images, HTML): a small toolbar
+ * (− / % / + / 1:1 / fit-width) plus Ctrl+wheel zooming. The content is
+ * wrapped in a scale transform inside an auto-scrolling body, so zoomed
+ * overflow scrolls naturally.
+ */
+function Zoomable({ children }: { children: React.ReactNode }): JSX.Element {
+  const [scale, setScale] = useState(1)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  const fit = useCallback((): void => {
+    const body = bodyRef.current
+    const content = contentRef.current
+    if (body === null || content === null) return
+    const natural = content.scrollWidth
+    if (natural <= 0) return
+    const fitScale = Math.max(0.25, Math.min(4, (body.clientWidth - 24) / natural))
+    setScale((s) => (Math.abs(s - fitScale) < 0.01 ? s : fitScale))
+  }, [])
+
+  useEffect(() => {
+    // Fit once on mount only: a persistent ResizeObserver would re-fit when
+    // the scrollbars appear/disappear as the user zooms, overriding their
+    // manual scale. Manual zoom stays until the user clicks 适应 again.
+    fit()
+  }, [fit])
+
+  const zoomBy = (delta: number): void => {
+    setScale((s) => Math.round(Math.min(4, Math.max(0.25, s + delta)) * 100) / 100)
+  }
+
+  return (
+    <div className={previewCss.zoomWrap}>
+      <div className={previewCss.zoomBar}>
+        <button type="button" className={previewCss.zoomBtn} onClick={() => zoomBy(-0.25)} title={t('preview.zoomOut')}>−</button>
+        <span className={previewCss.zoomPct}>{Math.round(scale * 100)}%</span>
+        <button type="button" className={previewCss.zoomBtn} onClick={() => zoomBy(0.25)} title={t('preview.zoomIn')}>+</button>
+        <button type="button" className={previewCss.zoomBtn} onClick={() => setScale(1)} title={t('preview.zoomReset')}>1:1</button>
+        <button type="button" className={previewCss.zoomBtn} onClick={fit} title={t('preview.zoomFit')}>{t('preview.zoomFitShort')}</button>
+      </div>
+      <div
+        ref={bodyRef}
+        className={previewCss.zoomBody}
+        onWheel={(event) => {
+          if (!event.ctrlKey) return
+          event.preventDefault()
+          zoomBy(event.deltaY < 0 ? 0.1 : -0.1)
+        }}
+      >
+        <div ref={contentRef} style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+          {children}
+        </div>
+      </div>
     </div>
   )
 }
