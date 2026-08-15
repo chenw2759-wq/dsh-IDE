@@ -1,0 +1,16 @@
+{
+  "name": "dsh-easyssh",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DSH 远程 SSH 工作区插件：本地大脑、远程手脚（接缝切换 + Web GUI 前端）",
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "lightningcss": "^1.32.0"
+  },
+  "license": "BSD-3-Clause"
+}

@@ -1,0 +1,148 @@
+/* Terminal panel (command console) styles. */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  background: color-mix(in srgb, var(--aion-bg-base) 92%, #000);
+  font-family: var(--aion-font-mono, ui-monospace, Consolas, monospace);
+  font-size: 12.5px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--aion-bg-3, #333);
+  flex: 0 0 auto;
+}
+
+.title {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.closeBtn {
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.7;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.closeBtn:hover {
+  opacity: 1;
+  background: var(--aion-bg-2, #262626);
+}
+
+.output {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 10px;
+}
+
+.empty {
+  opacity: 0.5;
+  padding: 8px 0;
+}
+
+.record {
+  margin-bottom: 10px;
+}
+
+.promptLine {
+  display: flex;
+  gap: 6px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.prompt {
+  color: #46d160;
+  opacity: 0.9;
+  user-select: none;
+}
+
+.command {
+  color: var(--aion-text-primary, #e6e6e6);
+  font-weight: 600;
+}
+
+.running {
+  color: #ffb454;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+
+.stdout {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--aion-text-primary, #d4d4d4);
+}
+
+.stderr {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #f56565;
+}
+
+.doneOk {
+  margin-top: 2px;
+  color: #46d160;
+  opacity: 0.85;
+}
+
+.doneFail {
+  margin-top: 2px;
+  color: #f56565;
+  opacity: 0.9;
+}
+
+.inputRow {
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--aion-bg-3, #333);
+  flex: 0 0 auto;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  background: var(--aion-bg-1, #1a1a1a);
+  border: 1px solid var(--aion-bg-3, #333);
+  border-radius: 6px;
+  color: var(--aion-text-primary, #e6e6e6);
+  font-family: inherit;
+  font-size: 12.5px;
+  padding: 5px 8px;
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--aion-primary, #4d9fff);
+}
+
+.runBtn {
+  background: var(--aion-primary, #165dff);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  padding: 5px 14px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.runBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

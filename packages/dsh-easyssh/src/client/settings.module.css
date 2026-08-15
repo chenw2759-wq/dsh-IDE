@@ -1,0 +1,160 @@
+/** Styles for the SSH host-manager settings page (CSS module). */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  max-width: 720px;
+}
+
+.hint {
+  opacity: 0.7;
+  font-size: 12px;
+  margin: 0;
+}
+
+.modeLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--aion-bg-3, rgba(128, 128, 128, 0.3));
+  border-radius: 8px;
+  background: var(--aion-bg-1, rgba(128, 128, 128, 0.06));
+}
+
+.rootLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rootLine input {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid var(--aion-bg-3, rgba(128, 128, 128, 0.35));
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+}
+
+.rootCell {
+  width: 140px;
+  padding: 3px 6px;
+  font-size: 12px;
+  border: 1px solid var(--aion-bg-3, rgba(128, 128, 128, 0.35));
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+}
+
+.title {
+  margin: 8px 0 4px;
+  font-size: 14px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--aion-bg-3, rgba(128, 128, 128, 0.2));
+}
+
+.table th {
+  opacity: 0.6;
+  font-weight: 600;
+}
+
+.actions {
+  white-space: nowrap;
+}
+
+.empty {
+  opacity: 0.6;
+  text-align: center;
+}
+
+.form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--aion-bg-3, rgba(128, 128, 128, 0.3));
+  border-radius: 8px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.field span {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.field input,
+.field select {
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid var(--aion-bg-3, rgba(128, 128, 128, 0.35));
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+}
+
+.formActions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.button {
+  padding: 3px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--aion-bg-3, rgba(128, 128, 128, 0.4));
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.button:hover {
+  background: rgba(128, 128, 128, 0.12);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.primary {
+  background: #0a7aff;
+  border-color: #0a7aff;
+  color: #fff;
+}
+
+.danger {
+  color: #e5484d;
+  border-color: rgba(229, 72, 77, 0.4);
+}
+
+.error {
+  color: #e5484d;
+  font-size: 12px;
+}
+
+.info {
+  color: #46a758;
+  font-size: 12px;
+}

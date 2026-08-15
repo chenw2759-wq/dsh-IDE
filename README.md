@@ -1,0 +1,170 @@
+# dsh-IDE — DSH Web GUI 一体化开发环境（JupyterLab 风格工作区 + SSH 远程开发）
+
+<p align="center">
+  <img src="https://img.shields.io/badge/dsh-plugin-2ea44f" alt="dsh-plugin">
+  <img src="https://img.shields.io/badge/node-%3E%3D22-339933" alt="node">
+  <img src="https://img.shields.io/badge/license-BSD--3--Clause-blue" alt="license">
+</p>
+
+把 DeepSeek Harness（DSH）Web GUI 升级为**一体化开发环境**：右侧面板提供文件树、带行号与斑马底纹的
+代码编辑器、命令行终端、Trae 风格编辑 diff、类型颜色标签——开箱即用的 JupyterLab 式工作区；同时
+内置 **SSH 远程工作区模式**：右上角（session log 左侧）配置 SSH 主机（密码 / 密钥，复用
+`~/.dsh/dsh-ssh.json`），进入后右侧面板自动切换为远程文件树，**模型本机的
+read / write / edit / glob / grep 与 bash / 终端在 SSH 模式下透明地在远程服务器执行**，LLM 与 Agent
+循环仍在本机——「本地大脑、远程手脚」。
+
+## 特性
+
+- **一体化 IDE 工作区**：文件树（懒加载 / 搜索 / 右键菜单：下载/重命名/复制/粘贴/删除）、带行号 +
+  斑马底纹的可编辑代码编辑器、命令行终端（▶ 运行 / >_ 终端）、Trae 风格编辑 diff（保存后自动弹出
+  Update 卡片，红删绿增）、类型颜色标签（橙 png / 绿 csv / 蓝 py / 黄 js / 紫 json / 青 md / 红 diff）。
+- **接缝切换**：通过 profile 补丁把 `ctx.fs` / `ctx.subprocess` 切换为模式路由门面——本地模式委托
+  给部署自带的沙箱化实现，SSH 模式委托给 SFTP/SSH 远程实现（原子写、版本校验、CRLF 处理、流式输出、
+  PTY 终端）。模型工具零改动地远程执行。
+- **远程文件系统**：完整 `@deepseek-ai/dsh-fs` 实现，路径/版本/原子写/CRLF/规范路径传输。
+- **远程子进程**：完整 `@deepseek-ai/dsh-subprocess` 实现，exec + PTY 终端，输出溢出转储到本地。
+- **Web GUI 前端（JupyterLab 风格工作区）**：右上角 SSH 配置/切换按钮；右侧面板随 SSH 模式自动切换
+  数据源——本地显示会话工作目录、SSH 模式显示远程目录（上=文件树，下=可编辑代码区，保存带 mtime
+  冲突检测）。
+- **代码区布局切换**：预览可在「下框展示」「右侧弹出代码框」「浮动覆盖」三态循环（⇊ / ⇉ / ⇱）；
+  编辑器带行号 + 斑马底纹（每行底色交替，JupyterLab/Trae 风格），可读写编辑、Ctrl+S 保存；浮动模式
+  下代码区可更宽、部分覆盖在对话框上方，文件树与搜索栏宽度不受影响。
+- **编辑回滚 diff（Trae 风格）**：**任何外部编辑**（Agent 工具写文件、其他进程改动）都会自动弹出
+  「Update(路径)」卡片到**下栏**——Added/removed 统计 + 删除行红底、新增行绿底；每个文件的每次
+  编辑都会弹（基线自动推进，不重复不遗漏）；保存后同样弹出。**全新文件（无历史基线）自动弹出全绿
+  卡片**（整份文件视为新增），**文件被删除自动弹出全红卡片**（整份文件视为移除）；diff 卡带固定双列
+  行号（旧/新各一列，增删行号对齐）、未变更行斑马底纹；点「编辑最新版本」可在 diff 卡内直接修改
+  最新代码并保存（保存后红绿自动更新），点「刷新」红绿不丢失。编辑器斑马纹与代码行严格对齐
+  （content-box 起点 + 跟随滚动），输入时底色也保持。
+- **类型颜色标识**：每个打开的标签带类型色块——橙色=图片（png/jpg）、绿色=CSV 数据表、蓝色=Python、
+  黄色=JS/TS、紫色=JSON、青色=Markdown、红色=diff、灰色=日志——标签再多也能一眼分辨；新打开的文件
+  与 diff 自动滚到可见位置，标签条横向滚动 + 标题截断，绝不拥挤。
+- **运行与终端**：代码工具栏「▶ 运行」直接执行当前文件（python/node/bash 等，SSH 模式下在远程执行）；
+  「>_ 终端」打开命令行面板，可随时输入命令；文件栏 tab 条也有独立终端入口（不打开代码也能用）。
+- **文件右键菜单**：下载 / 重命名 / 复制 / 粘贴 / 删除，本地与远程一致。
+- **符号链接跟随**：远程文件树正确识别符号链接目录（如 AutoDL 的 `/root/autodl-tmp`）。
+- **显式远程工具**：`remote_status` / `remote_ls` / `remote_read` / `remote_write` / `remote_mkdir` /
+  `remote_rm` / `remote_rename` / `remote_glob` / `remote_grep`，以及 `ssh_exec` / `ssh_upload` /
+  `ssh_download`。
+- **多主机**：GUI 配置多台主机（含 ProxyJump 跳板链、密钥 passphrase），一键切换。
+- **设置页主机管理**：设置面板内置「SSH 远程工作区」专区，主机增删改 / 测试连接 / 进入退出一键完成，
+  配置持久化在 `~/.dsh/dsh-ssh.json`。
+
+## 界面截图
+
+![SSH 远程工作区设置](docs/screenshot-settings.png)
+
+设置面板中的「SSH 远程工作区」专区：管理主机、测试连接、进入 / 退出 SSH 模式。
+
+![工作区文件预览与编辑](docs/screenshot-workspace.png)
+
+连接 SSH 后右侧面板显示远程文件树，下方可打开 `.py` 等文本文件查看并编辑保存（mtime 冲突检测）。
+
+![DSH 主界面](docs/screenshot-gui-main.png)
+
+DSH Web GUI 主界面（深色主题）：右上角 SSH 配置/切换按钮，右侧文件面板随会话工作目录展示文件树。
+
+![右侧文件面板](docs/screenshot-gui-panel.png)
+
+右侧上下分栏面板：上=文件树（文件名搜索定位），下=代码预览/编辑区；本地目录、SSH 远程目录自动切换。
+
+![JupyterLab 风格文件树](docs/screenshot-jupyter-tree.png)
+
+SSH 模式下的文件树：远程目录一目了然，点击文件即在下方/右侧打开。
+
+![JupyterLab 风格代码编辑](docs/screenshot-jupyter-code.png)
+
+打开的代码文件带工具栏（分屏 / ▶ 运行 / >_ 终端 / 刷新），代码区行号 + 斑马底纹，可读写编辑。
+
+### 操作速览
+
+- **布局切换**：预览 tab 条右侧「⇊ / ⇉ / ⇱」循环切换——下框展示 / 右侧弹出代码框 / 浮动覆盖（更宽）。
+- **运行代码**：打开 `.py` / `.js` / `.sh` 等文件 → 工具栏「▶ 运行」，SSH 模式下在远程主机执行。
+- **打开终端**：预览工具栏「>_ 终端」，或文件栏 tab 条「>_」按钮（不打开代码也能开命令行），可直接输入命令。
+- **文件右键**：文件树节点右键 → 下载 / 重命名 / 复制 / 粘贴 / 删除（本地与远程一致）。
+
+## 仓库结构
+
+```
+dsh-IDE/
+├── packages/
+│   ├── dsh-aionui-panel/ # 右侧面板系统：文件树/预览/终端/编辑 diff/类型色标签（IDE 工作区本体）
+│   ├── dsh-ssh/          # SSH 引擎：ssh2 连接池、exec/PTY/SFTP/隧道/集群（SSH 远程模式依赖）
+│   └── dsh-easyssh/      # SSH 远程工作区：模式状态机、接缝门面、远程实现、Web GUI 前端
+└── README.md
+```
+
+> 右侧文件面板（文件树 / 预览 / 终端 / 右键菜单 / 编辑 diff）由 **dsh-aionui-panel**（DSH Web GUI 右侧
+> 面板系统）提供，本仓库内与 dsh-IDE 配套维护；dsh-easyssh 通过 `sshWorkspaceMode` 跨插件服务驱动它
+> 跟随 SSH 模式。SSH 远程开发只是 dsh-IDE 的能力之一——本地目录同样享受完整的 IDE 工作区。
+
+## 安装
+
+前置要求：Node.js ≥ 22、pnpm、已安装 dsh（`npx @deepseek-ai/dsh`）。
+
+```sh
+# 1) 克隆并构建
+git clone https://github.com/chenw2759-wq/dsh-IDE.git
+cd dsh-IDE
+pnpm install
+pnpm --filter "./packages/dsh-aionui-panel" build
+pnpm --filter "./packages/dsh-ssh" build
+pnpm --filter "./packages/dsh-easyssh" build
+
+# 2) 把三个包安装到 web profile（注意用你自己的绝对路径）
+dsh plugin --profile web add file:C:/你的路径/dsh-IDE/packages/dsh-aionui-panel
+dsh plugin --profile web add file:C:/你的路径/dsh-IDE/packages/dsh-ssh
+dsh plugin --profile web add file:C:/你的路径/dsh-IDE/packages/dsh-easyssh
+```
+
+> 仓库品牌为 dsh-IDE；核心插件包名沿用 `dsh-easyssh`（安装标识，不随品牌改名）。
+
+### ⚠️ 第 3 步：接缝切换补丁（关键）
+
+打开 `<profile>/cordis.patch.yml`（Windows 默认 `C:\Users\<你>\.dsh\profiles\web\cordis.patch.yml`），写入：
+
+```yaml
+- id: fs-sandbox
+  disabled: true
+- id: subprocess
+  disabled: true
+- insert:
+  - id: easyssh-fs
+    name: 'dsh-easyssh/fs'
+  - id: easyssh-subprocess
+    name: 'dsh-easyssh/subprocess'
+```
+
+### 第 4 步：重启
+
+```sh
+# 重启 dsh
+npx @deepseek-ai/dsh web
+```
+
+打开 `http://127.0.0.1:3080` → **Ctrl+F5 硬刷新**（浏览器缓存旧 client 包时必做）→ 右上角 SSH 按钮配置主机 → 进入 SSH 模式。
+
+> 回滚 = 把 `cordis.patch.yml` 恢复为 `[]` 再重启。
+
+## 使用
+
+1. 会话右上角（session log 左侧）点击 **SSH** → 填主机（别名/主机/端口/用户名/密码或密钥/远程根）
+   → 保存并测试 → 进入 SSH 模式。
+2. 右侧面板自动切换到远程文件树；直接对 Agent 说「读/改远程文件」「在服务器上执行命令」——普通工具即远程执行。
+3. 路径规则：远程绝对路径直接用；相对路径以远程根 `remoteRoot`（默认 `~`）为基准；不要用 Windows 本机路径。
+4. 右上角切换按钮随时回到本机模式。
+
+## 安全
+
+- 路由仅 loopback（同源校验）；认证材料存 `~/.dsh/dsh-ssh.json`（0600）。
+- 远程操作消耗真实远程资源，先确认再执行；**SSH 模式下本机沙箱不对远程执行生效**。
+- 远程 grep/glob/realpath 依赖 GNU find/grep/coreutils。
+
+## 致谢
+
+远程 `ctx.fs` / `ctx.subprocess` 实现移植并改编自 [UynajGI/dsh-ssh](https://github.com/UynajGI/dsh-ssh)
+（MIT，详见各文件头与 NOTICE），在其基础上补全了 Web GUI 前端与运行时模式切换。
+
+## License
+
+BSD-3-Clause。远程实现的 MIT 版权归 UynajGI/dsh-ssh 原作者（见 NOTICE）。

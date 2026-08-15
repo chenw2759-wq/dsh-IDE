@@ -1,0 +1,140 @@
+/* SSH config dialog overlay styles (imported by dialog.tsx). */
+
+.dialogBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.dialog {
+  width: 460px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  border-radius: 10px;
+  padding: 16px 18px;
+  background: var(--aion-bg-1, #fff);
+  color: var(--aion-text-primary, #000);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  font-family: var(--aion-font-sans, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif);
+  font-size: 13px;
+}
+
+.dialogHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.dialogHeader strong {
+  font-size: 15px;
+}
+
+.dialogSubtitle {
+  color: var(--aion-text-tertiary, #86909c);
+  font-size: 12px;
+}
+
+.dialogGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field span {
+  font-size: 12px;
+  color: var(--aion-text-secondary, #454d5f);
+}
+
+.field input,
+.field select {
+  padding: 6px 8px;
+  border: 1px solid var(--aion-border-base, #e5e6eb);
+  border-radius: 6px;
+  background: var(--aion-bg-2, #f2f3f5);
+  color: var(--aion-text-primary, #000);
+  font-size: 13px;
+  outline: none;
+}
+
+.field input:focus,
+.field select:focus {
+  border-color: var(--aion-primary, #165dff);
+}
+
+.fieldHint {
+  font-size: 11px;
+  color: var(--aion-text-tertiary, #86909c);
+}
+
+.dialogOk {
+  margin-top: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--aion-success, #00b42a);
+  color: #fff;
+  font-size: 12px;
+}
+
+.dialogFail {
+  margin-top: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--aion-danger, #f53f3f);
+  color: #fff;
+  font-size: 12px;
+}
+
+.dialogInfo {
+  margin-top: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--aion-bg-2, #f2f3f5);
+  color: var(--aion-text-secondary, #454d5f);
+  font-size: 12px;
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.button {
+  padding: 6px 14px;
+  border: 1px solid var(--aion-border-base, #e5e6eb);
+  border-radius: 6px;
+  background: var(--aion-bg-2, #f2f3f5);
+  color: var(--aion-text-primary, #000);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.buttonPrimary {
+  background: var(--aion-primary, #165dff);
+  border-color: var(--aion-primary, #165dff);
+  color: #fff;
+}
+
+.dialogHint {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--aion-text-tertiary, #86909c);
+}
