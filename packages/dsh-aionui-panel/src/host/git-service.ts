@@ -31,22 +31,28 @@ export interface GitRunner {
 /** Collected-output cap for one git command. */
 const OUTPUT_CAP_BYTES = 1 << 20
 
-/** Production runner over `ctx.subprocess`: one managed child per command. */
+/** Quote one argument for the cmd/sh wrapper (spaces and quotes). */
+function shellArg(arg: string): string {
+  return /[\s"]/.test(arg) ? `"${arg.replace(/"/g, '""')}"` : arg
+}
+
+/**
+ * Production runner over `ctx.subprocess`: one managed child per command.
+ * The command is wrapped through the platform shell (cmd /c or sh -c) like
+ * the exec seam — the sandboxed subprocess provider reliably runs shell
+ * entrypoints, while a bare `git` name may be unresolvable from its scrubbed
+ * PATH (which is why the earlier direct-spawn variant failed).
+ */
 export function subprocessRunner(ctx: Context): GitRunner {
   return {
     async run(argv, cwd) {
-      // Resolve `git` through the execution world first: the sandboxed local
-      // subprocess provider wants a canonical executable (a bare name may not
-      // be resolvable from its scrubbed PATH).
-      let gitPath = 'git'
-      try {
-        gitPath = await ctx.subprocess.resolveExecutable('git')
-      } catch {
-        // keep the bare name; the spawn below reports the real failure
-      }
+      const command = argv.map(shellArg).join(' ')
       const spec: SubprocessSpawnSpec = {
-        argv: [gitPath, ...argv],
+        argv: process.platform === 'win32'
+          ? ['cmd', '/c', `git ${command}`]
+          : ['sh', '-c', `git ${command}`],
         cwd,
+        env: process.platform === 'win32' ? { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' } : undefined,
         stdio: {
           stdin: 'ignore',
           stdout: { maxBytes: OUTPUT_CAP_BYTES },
