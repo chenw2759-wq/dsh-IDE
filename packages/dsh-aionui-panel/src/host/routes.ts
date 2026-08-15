@@ -45,7 +45,9 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
     const buffer = chunk as Buffer
     chunks.push(buffer)
     total += buffer.length
-    if (total > 1 << 20) return null
+    // Binary writes (office save) ship base64; allow a generous 16 MB so a
+    // rebuilt docx/xlsx/pptx package is never cut off as "malformed request".
+    if (total > (16 << 20)) return null
   }
   const text = Buffer.concat(chunks).toString('utf8')
   if (text === '') return null

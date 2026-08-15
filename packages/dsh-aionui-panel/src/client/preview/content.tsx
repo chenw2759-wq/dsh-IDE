@@ -18,7 +18,7 @@ import { readSettings } from '../settings.ts'
 import { renderMarkdown, resolveMarkdownImage } from './markdown.ts'
 import { OfficeViewer } from './office.tsx'
 import { EditableOffice } from './office-editor.tsx'
-import { VisualEditor } from './visual-editor.tsx'
+import { VisualEditor, boxesWrapHtml, boxesToMarkdown } from './visual-editor.tsx'
 import previewCss from '../styles/preview.module.css'
 
 /** Escape text for safe injection into a <pre><code> highlight layer. */
@@ -167,10 +167,7 @@ function OfficeTab({ tab, contentType, onContentChange, onSave }: {
         html={tab.officeEditHtml}
         contentType={contentType}
         dirty={tab.dirty}
-        onEdited={() => {
-          const el = document.querySelector<HTMLElement>('[data-aionui-office-editable]')
-          if (el !== null) onContentChange(el.innerHTML)
-        }}
+        onEdited={(html) => onContentChange(html)}
         onSave={onSave}
       />
     )
@@ -268,9 +265,13 @@ function MarkdownViewer({
     return (
       <VisualEditor
         html={html}
-        dirty={dirty}
-        onEdited={(next) => onContentChange(next)}
-        onSave={onSave}
+        onSave={(boxes) => {
+          // Markdown keeps markdown source: merge the edited boxes back into
+          // markdown text (bold survives; position/color are markdown-
+          // inexpressible). Then persist to disk once.
+          onContentChange(boxesToMarkdown(boxes))
+          onSave()
+        }}
       />
     )
   }
@@ -313,9 +314,10 @@ function HtmlViewer({
     return (
       <VisualEditor
         html={content}
-        dirty={dirty}
-        onEdited={(next) => onContentChange(next)}
-        onSave={onSave}
+        onSave={(boxes) => {
+          onContentChange(boxesWrapHtml(content, boxes))
+          onSave()
+        }}
       />
     )
   }
@@ -376,6 +378,12 @@ export function CodeEditor({
   const gutterRef = useRef<HTMLDivElement>(null)
   const highlightRef = useRef<HTMLPreElement>(null)
   const html = useMemo(() => highlightHtml(content, language), [content, language])
+  // Split the highlighted HTML into per-line blocks so the zebra stripes are
+  // drawn as line backgrounds (exact alignment) rather than a repeating
+  // gradient whose period can drift from the textarea's real line height
+  // (especially with CJK in monospace). highlight.js never spans a span
+  // across a newline, so the split is safe.
+  const lines = useMemo(() => html.split('\n'), [html])
 
   const syncScroll = (event: React.UIEvent<HTMLTextAreaElement>): void => {
     const { scrollTop, scrollLeft } = event.currentTarget
@@ -395,7 +403,11 @@ export function CodeEditor({
       </div>
       <div className={previewCss.codeEditorBody}>
         <pre ref={highlightRef} className={previewCss.codeHighlight} aria-hidden="true">
-          <code dangerouslySetInnerHTML={{ __html: html + '\n' }} />
+          <code>
+            {lines.map((line, index) => (
+              <div key={index} className={previewCss.codeEditorLine} dangerouslySetInnerHTML={{ __html: line === '' ? ' ' : line }} />
+            ))}
+          </code>
         </pre>
         <textarea
           className={`${previewCss.textEditor} ${previewCss.editorTransparent}`}

@@ -543,11 +543,9 @@
   background: color-mix(in srgb, var(--aion-bg-3) 20%, transparent);
 }
 
-/* The highlight layer: sits UNDER the textarea. It paints the zebra stripes
-   (so the alternating tint follows the code, not the viewport) and the
-   colored tokens. `background-origin: content-box` aligns stripe row 1 to
-   code line 1; `background-attachment: local` keeps stripes glued while the
-   textarea scrolls (scrollTop/Left are mirrored onto this pre). */
+/* The highlight layer: sits UNDER the textarea. It paints the per-line zebra
+   stripes (each highlighted line is its own block, so the alternating tint
+   aligns to the code lines exactly) and the colored tokens. */
 .codeHighlight {
   margin: 0;
   white-space: pre;
@@ -565,15 +563,18 @@
   overflow: hidden;
   padding: 12px 14px 16px;
   pointer-events: none;
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0px,
-    transparent var(--editor-line),
-    color-mix(in srgb, var(--aion-bg-3) 20%, transparent) var(--editor-line),
-    color-mix(in srgb, var(--aion-bg-3) 20%, transparent) calc(var(--editor-line) * 2)
-  );
-  background-origin: content-box;
-  background-attachment: local;
+}
+
+/* One highlighted code line (block), zebra-tinted on odd rows. */
+.codeEditorLine {
+  display: block;
+  height: var(--editor-line);
+  line-height: var(--editor-line);
+  white-space: pre;
+}
+
+.codeEditorLine:nth-child(even) {
+  background: color-mix(in srgb, var(--aion-bg-3) 20%, transparent);
 }
 
 /* The textarea: transparent text (the highlight layer shows through), native
@@ -1344,6 +1345,22 @@ html[style*="color-scheme: light"] {
   flex: 1 1 0;
 }
 
+/* Margin value popover (small inline input, not a modal). */
+.officeMarginPop {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border: 1px solid var(--aion-bg-3, #e5e6eb);
+  border-radius: 8px;
+  background: var(--aion-bg-1, #fff);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.officeMarginPop input {
+  width: 70px;
+}
+
 .officeSave {
   border-color: var(--aion-primary, #165dff);
   color: var(--aion-primary, #165dff);
@@ -1436,14 +1453,22 @@ html[style*="color-scheme: light"] {
   flex: 1 1 0;
   min-height: 0;
   overflow: auto;
+  padding: 0;
+  background: var(--aion-bg-2, #f7f8fa);
+}
+
+/* The ORIGINAL rendered page stays as the backdrop (never replaced by boxes).
+   It is in normal flow so it establishes the canvas scroll height; the text
+   boxes are absolutely positioned ON TOP of it. */
+.visualBackdrop {
+  position: relative;
+  width: 100%;
+  min-height: 100%;
   padding: 24px;
-  background:
-    linear-gradient(45deg, var(--aion-bg-2, #f7f8fa) 25%, transparent 25%),
-    linear-gradient(-45deg, var(--aion-bg-2, #f7f8fa) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, var(--aion-bg-2, #f7f8fa) 75%),
-    linear-gradient(-45deg, transparent 75%, var(--aion-bg-2, #f7f8fa) 75%);
-  background-size: 20px 20px;
-  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+  box-sizing: border-box;
+  color: var(--aion-text-primary, #1f2329);
+  pointer-events: none;
+  z-index: 0;
 }
 
 .visualBox {
@@ -1457,6 +1482,7 @@ html[style*="color-scheme: light"] {
   cursor: move;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   transition: box-shadow 0.12s ease, border-color 0.12s ease;
+  z-index: 2;
 }
 
 .visualBoxSelected {
@@ -1480,15 +1506,18 @@ html[style*="color-scheme: light"] {
   line-height: 1.5;
 }
 
+/* LEFT-edge resize handle (PPT-style: grab the left boundary to resize). */
 .visualResize {
   position: absolute;
-  right: 2px;
-  bottom: 2px;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 12px;
-  height: 12px;
+  height: 40px;
+  border-left: 2px solid var(--aion-primary, #165dff);
   border-right: 2px solid var(--aion-primary, #165dff);
-  border-bottom: 2px solid var(--aion-primary, #165dff);
-  cursor: nwse-resize;
+  border-radius: 4px;
+  cursor: ew-resize;
   opacity: 0.7;
 }
 

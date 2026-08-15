@@ -5,6 +5,12 @@
  * align / underline / color / spacing / margin / highlight). Saving rebuilds
  * the office package from the edited HTML and writes it back as a binary.
  *
+ * The editable surface is UNCONTROLLED: the initial HTML is injected once and
+ * the browser owns the DOM from then on. Keystrokes never re-render React and
+ * never re-inject innerHTML — that is what keeps the caret from jumping to
+ * the start after the second character. The edited HTML is read from the DOM
+ * only at save time.
+ *
  * Rebuild strategy: the edited DOM mirrors the parsed preview HTML — docx
  * keeps paragraphs/table rows, xlsx keeps its table, pptx keeps its slide
  * boxes — and the OOXML is regenerated from those blocks. Complex layouts
@@ -13,24 +19,11 @@
  * @module dsh-aionui-panel/client/preview/office-editor
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { readSettings } from '../settings.ts'
 import { t } from '../locales.ts'
 import previewCss from '../styles/preview.module.css'
-
-/** The full editor tool set, gated by settings.editorTools. */
-interface EditorTools {
-  font: boolean
-  fontSize: boolean
-  boldItalic: boolean
-  align: boolean
-  underline: boolean
-  color: boolean
-  spacing: boolean
-  margin: boolean
-  highlight: boolean
-}
 
 const FONTS = ['宋体', '黑体', '仿宋', '楷体', 'Arial', 'Times New Roman', 'Microsoft YaHei', 'Courier New', 'sans-serif', 'serif']
 const SIZES = [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48]
@@ -72,6 +65,8 @@ export function OfficeToolbar({ onSave, dirty }: { onSave: () => void; dirty: bo
   const tools = readSettings().editorTools
   const [font, setFont] = useState('')
   const [size, setSize] = useState('')
+  const [marginOpen, setMarginOpen] = useState(false)
+  const [marginValue, setMarginValue] = useState('2em')
 
   const applyFont = (value: string): void => {
     setFont(value)
@@ -81,9 +76,16 @@ export function OfficeToolbar({ onSave, dirty }: { onSave: () => void; dirty: bo
     setSize(value)
     exec('fontSize', String(Math.max(1, Math.round(Number(value) / 3))))
   }
+  const applyMargin = (): void => {
+    toggleStyle('margin-left', marginValue.trim() === '' ? '' : marginValue.trim())
+    setMarginOpen(false)
+  }
 
   return (
     <div className={previewCss.officeToolbar}>
+      {/* Undo / redo (Word-like). */}
+      <button type="button" className={previewCss.officeToolBtn} title={t('preview.undo')} onMouseDown={(e) => { e.preventDefault(); exec('undo') }}>↶</button>
+      <button type="button" className={previewCss.officeToolBtn} title={t('preview.redo')} onMouseDown={(e) => { e.preventDefault(); exec('redo') }}>↷</button>
       {tools.font && (
         <select
           className={previewCss.officeTool}
@@ -155,8 +157,23 @@ export function OfficeToolbar({ onSave, dirty }: { onSave: () => void; dirty: bo
       )}
       {tools.margin && (
         <>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.margin')} onMouseDown={(e) => { e.preventDefault(); toggleStyle('margin-left', '2em') }}>缩</button>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.margin')} onMouseDown={(e) => { e.preventDefault(); toggleStyle('margin-left', '') }}>无</button>
+          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.margin')} onMouseDown={(e) => { e.preventDefault(); setMarginOpen(!marginOpen) }}>页边距</button>
+          {marginOpen && (
+            <span className={previewCss.officeMarginPop}>
+              <input
+                className={previewCss.officeTool}
+                value={marginValue}
+                placeholder="2em / 24px"
+                onChange={(event) => setMarginValue(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') applyMargin()
+                  if (event.key === 'Escape') setMarginOpen(false)
+                }}
+                autoFocus
+              />
+              <button type="button" className={previewCss.officeToolBtn} onMouseDown={(e) => { e.preventDefault(); applyMargin() }}>确定</button>
+            </span>
+          )}
         </>
       )}
       <span className={previewCss.officeToolbarSpacer} />
@@ -172,25 +189,39 @@ export function OfficeToolbar({ onSave, dirty }: { onSave: () => void; dirty: bo
   )
 }
 
-/** The editable office surface. */
+/** The editable office surface (uncontrolled contenteditable — no re-inject). */
 export function EditableOffice({ html, contentType, onEdited, onSave, dirty }: {
   html: string
   contentType: 'word' | 'excel' | 'ppt'
-  onEdited: () => void
+  onEdited: (html: string) => void
   onSave: () => void
   dirty: boolean
 }): JSX.Element {
+  const ref = useRef<HTMLDivElement>(null)
+  const [ready, setReady] = useState(false)
+
+  // Inject the initial HTML exactly once; afterwards the browser owns the DOM
+  // (React never re-sets innerHTML, so the caret stays where the user types).
+  useEffect(() => {
+    if (ref.current === null || ready) return
+    ref.current.innerHTML = html
+    setReady(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [html])
+
   return (
     <div className={previewCss.officeEditWrap}>
       <OfficeToolbar onSave={onSave} dirty={dirty} />
       <div
+        ref={ref}
         className={previewCss.officeScroll}
         data-aionui-office-editable=""
         contentEditable
         suppressContentEditableWarning
         spellCheck={false}
-        onInput={onEdited}
-        dangerouslySetInnerHTML={{ __html: html }}
+        onInput={() => {
+          if (ref.current !== null) onEdited(ref.current.innerHTML)
+        }}
       />
     </div>
   )
