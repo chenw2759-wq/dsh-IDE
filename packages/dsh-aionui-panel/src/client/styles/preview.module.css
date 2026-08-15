@@ -1211,3 +1211,298 @@ html[style*="color-scheme: light"] {
   --hljs-meta: #0550ae;
   --hljs-deletion: #cf222e;
 }
+
+/* ── Office preview (docx / xlsx / pptx) ─────────────────────────────────── */
+
+.officeScroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px 22px;
+  background: var(--aion-bg-1);
+  font-family: var(--aion-font-sans, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--aion-text-primary, #1f2329);
+}
+
+.officePara {
+  margin: 0 0 6px;
+  min-height: 1.4em;
+}
+
+.officeHeading {
+  margin: 14px 0 8px;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--aion-text-primary, #1f2329);
+}
+
+.officeTable {
+  border-collapse: collapse;
+  margin: 8px 0 14px;
+  width: 100%;
+}
+
+.officeTable td,
+.officeTable th {
+  border: 1px solid var(--aion-bg-3, #e5e6eb);
+  padding: 6px 10px;
+  vertical-align: top;
+  font-size: 13px;
+}
+
+.officeTable tr:nth-child(even) td {
+  background: var(--aion-bg-2, #f7f8fa);
+}
+
+.officeSlide {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  margin: 0 0 18px;
+  border: 1px solid var(--aion-bg-3, #e5e6eb);
+  border-radius: 8px;
+  background: var(--aion-bg-2, #f7f8fa);
+}
+
+.officeSlideBox {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--aion-bg-1, #fff);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Office in-frame editing (P4) ────────────────────────────────────────── */
+
+.officeEditWrap {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.officeToolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--aion-bg-3, #e5e6eb);
+  background: var(--aion-bg-2, #f7f8fa);
+  flex-wrap: wrap;
+}
+
+.officeTool {
+  height: 24px;
+  max-width: 110px;
+  padding: 0 6px;
+  border: 1px solid var(--aion-bg-3, #e5e6eb);
+  border-radius: 6px;
+  background: var(--aion-bg-1, #fff);
+  color: var(--aion-text-primary, #1f2329);
+  font-size: 12px;
+  outline: none;
+}
+
+.officeToolBtn {
+  height: 24px;
+  min-width: 26px;
+  padding: 0 7px;
+  border: 1px solid var(--aion-bg-3, #e5e6eb);
+  border-radius: 6px;
+  background: var(--aion-bg-1, #fff);
+  color: var(--aion-text-primary, #1f2329);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.officeToolBtn:hover {
+  background: var(--aion-bg-3, #e5e6eb);
+}
+
+.officeToolBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.officeColor {
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--aion-bg-3, #e5e6eb);
+  border-radius: 6px;
+  background: var(--aion-bg-1, #fff);
+  cursor: pointer;
+}
+
+.officeToolbarSpacer {
+  flex: 1 1 0;
+}
+
+.officeSave {
+  border-color: var(--aion-primary, #165dff);
+  color: var(--aion-primary, #165dff);
+  font-weight: 600;
+}
+
+.officeSave:hover {
+  background: color-mix(in srgb, var(--aion-primary, #165dff) 12%, transparent);
+}
+
+/* ── Visual editor (P4.2): PowerPoint-style text boxes ───────────────────── */
+
+.visualWrap {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.visualToolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--aion-bg-3, #e5e6eb);
+  background: var(--aion-bg-2, #f7f8fa);
+  flex-wrap: wrap;
+}
+
+.visualBtn {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--aion-bg-3, #e5e6eb);
+  border-radius: 7px;
+  background: var(--aion-bg-1, #fff);
+  color: var(--aion-text-primary, #1f2329);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.visualBtn:hover {
+  background: var(--aion-bg-3, #e5e6eb);
+}
+
+.visualBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.visualBtnActive {
+  border-color: var(--aion-primary, #165dff);
+  color: var(--aion-primary, #165dff);
+}
+
+.visualSave {
+  border-color: var(--aion-primary, #165dff);
+  color: var(--aion-primary, #165dff);
+  font-weight: 600;
+}
+
+.visualSpacer {
+  flex: 1 1 0;
+}
+
+.visualColor {
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--aion-bg-3, #e5e6eb);
+  border-radius: 7px;
+  background: var(--aion-bg-1, #fff);
+  cursor: pointer;
+}
+
+.visualTool {
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--aion-bg-3, #e5e6eb);
+  border-radius: 7px;
+  background: var(--aion-bg-1, #fff);
+  color: var(--aion-text-primary, #1f2329);
+  font-size: 12px;
+  outline: none;
+}
+
+.visualCanvas {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px;
+  background:
+    linear-gradient(45deg, var(--aion-bg-2, #f7f8fa) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--aion-bg-2, #f7f8fa) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--aion-bg-2, #f7f8fa) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--aion-bg-2, #f7f8fa) 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+}
+
+.visualBox {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  border: 1px dashed rgba(128, 128, 128, 0.5);
+  border-radius: 8px;
+  padding: 8px;
+  box-sizing: border-box;
+  cursor: move;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.visualBoxSelected {
+  border-color: var(--aion-primary, #165dff);
+  border-style: solid;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+}
+
+.visualText {
+  flex: 1 1 0;
+  width: 100%;
+  min-height: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  resize: none;
+  line-height: 1.5;
+}
+
+.visualResize {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 12px;
+  height: 12px;
+  border-right: 2px solid var(--aion-primary, #165dff);
+  border-bottom: 2px solid var(--aion-primary, #165dff);
+  cursor: nwse-resize;
+  opacity: 0.7;
+}
+
+.visualBox:hover .visualResize {
+  opacity: 1;
+}
+
+.visualEmpty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--aion-text-tertiary, #86909c);
+  font-size: 13px;
+  pointer-events: none;
+}

@@ -69,27 +69,39 @@ export function PreviewToolbar({
   onDownload,
   onRun,
   onOpenTerminal,
+  officeEditing,
+  onToggleOfficeEdit,
+  visualMode,
+  onToggleVisualMode,
 }: {
   contentType: PreviewContentType
   hasContent: boolean
   loading: boolean
   dirty: boolean
   updated: boolean
-  viewMode: 'source' | 'preview'
+  viewMode: 'source' | 'preview' | 'visual'
   canToggleView: boolean
   split: boolean
   canSplit: boolean
-  onViewModeChange: (mode: 'source' | 'preview') => void
+  onViewModeChange: (mode: 'source' | 'preview' | 'visual') => void
   onSplitChange: (split: boolean) => void
   onRefresh: () => void
   onSave: () => void
   onDownload: () => void
   onRun?: () => void
   onOpenTerminal?: () => void
+  /** Office tabs (P4): whether in-frame editing is armed. */
+  officeEditing?: boolean
+  onToggleOfficeEdit?: () => void
+  /** HTML/Markdown (P4.2): PowerPoint-style visual editing. */
+  visualMode?: boolean
+  onToggleVisualMode?: () => void
 }): JSX.Element {
   const refreshState = refreshStateFor(contentType, hasContent, loading, updated)
   const editable = isEditableType(contentType)
   const runnable = contentType === 'code'
+  const isOffice = contentType === 'word' || contentType === 'excel' || contentType === 'ppt'
+  const canVisual = contentType === 'html' || contentType === 'markdown'
 
   return (
     <div className={previewCss.toolbar}>
@@ -143,6 +155,26 @@ export function PreviewToolbar({
           onClick={onOpenTerminal}
         >
           &gt;_ {t('preview.terminal')}
+        </button>
+      )}
+      {isOffice && onToggleOfficeEdit !== undefined && (
+        <button
+          type="button"
+          className={`${previewCss.toolbarBtn}${officeEditing ? ` ${previewCss.toolbarBtnActive}` : ''}`}
+          title={t('preview.edit')}
+          onClick={onToggleOfficeEdit}
+        >
+          {t('preview.edit')}
+        </button>
+      )}
+      {canVisual && onToggleVisualMode !== undefined && (
+        <button
+          type="button"
+          className={`${previewCss.toolbarBtn}${visualMode ? ` ${previewCss.toolbarBtnActive}` : ''}`}
+          title={t('visual.title')}
+          onClick={onToggleVisualMode}
+        >
+          {t('visual.title')}
         </button>
       )}
       <button

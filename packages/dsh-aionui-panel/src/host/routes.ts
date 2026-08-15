@@ -228,6 +228,21 @@ export function registerPanelRoutes(ctx: Context, fs: FsService, git: GitService
         json(res, 'mtime' in result ? OK(result) : FAIL(result))
         return
       }
+      case '/aionui-panel/write-binary': {
+        const path = strField(payload, 'path')
+        const base64 = strField(payload, 'base64')
+        if (path === null || base64 === null) {
+          json(res, FAIL(BAD_REQUEST))
+          return
+        }
+        const rawBase = typeof payload === 'object' && payload !== null
+          ? (payload as Record<string, unknown>).baseMtime
+          : undefined
+        const baseMtime = typeof rawBase === 'number' && Number.isFinite(rawBase) ? rawBase : undefined
+        const result = await fs.writeBinary(root, path, base64, baseMtime)
+        json(res, 'mtime' in result ? OK(result) : FAIL(result))
+        return
+      }
       case '/aionui-panel/search': {
         const query = strField(payload, 'query') ?? ''
         const result = await fs.search(root, query)

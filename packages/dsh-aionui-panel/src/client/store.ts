@@ -952,6 +952,9 @@ export interface PreviewTabState {
   editMtime?: number
   /** Image dimensions for image tabs. */
   image?: { width: number; height: number }
+  /** Office tabs (P4): the edited contenteditable HTML (null = read-only
+   *  preview). Saving rebuilds the docx/xlsx/pptx package from it. */
+  officeEditHtml?: string
   dirty: boolean
   /** mtime the loaded/saved content is based on (write-conflict base). */
   mtime?: number
@@ -994,6 +997,9 @@ export interface PreviewStore extends StateHandle<PreviewState> {
   /** Edit-diff tabs: live-edit the latest content (kept in editContent). */
   setEditDiffContent: (id: string, text: string) => void
   saveEditDiff: (id: string) => Promise<void>
+  /** Office tabs (P4): enter in-frame editing with the edited HTML, or exit
+   *  back to the read-only preview (editHtml undefined). */
+  setOfficeEditHtml: (id: string, editHtml: string | undefined) => void
   setOpen: (open: boolean) => void
   handleFsChange: (rel?: string) => Promise<void>
   handleGitChange: (root: string) => void
@@ -1090,7 +1096,8 @@ export function createPreviewStore(
       ...prev,
       tabs: prev.tabs.map((item) => (item.id === id ? { ...item, loading: true, error: null } : item)),
     }))
-    const asImage = tab.contentType === 'image'
+    const asImage = tab.contentType === 'image' || tab.contentType === 'word'
+      || tab.contentType === 'excel' || tab.contentType === 'ppt'
     // A RESTORED edit-diff tab (contentType 'diff', no staged side) has no
     // persisted diff content — rebuild the card from the file tab's baseline
     // and the current disk state, instead of dumping raw code into the view.
@@ -1449,13 +1456,70 @@ export function createPreviewStore(
     updateContent(id: string, content: string) {
       handle.update((prev) => ({
         ...prev,
-        tabs: prev.tabs.map((tab) => (tab.id === id ? { ...tab, content, dirty: true, updated: false } : tab)),
+        tabs: prev.tabs.map((tab) => {
+          if (tab.id !== id) return tab
+          const isOffice = tab.contentType === 'word' || tab.contentType === 'excel' || tab.contentType === 'ppt'
+          return isOffice
+            ? { ...tab, officeEditHtml: content, dirty: true, updated: false }
+            : { ...tab, content, dirty: true, updated: false }
+        }),
+      }))
+    },
+    setOfficeEditHtml(id: string, editHtml: string | undefined) {
+      handle.update((prev) => ({
+        ...prev,
+        tabs: prev.tabs.map((tab) => (tab.id === id ? { ...tab, officeEditHtml: editHtml, dirty: editHtml !== undefined } : tab)),
       }))
     },
     async saveTab(id: string) {
       const state = handle.getSnapshot()
       const tab = state.tabs.find((item) => item.id === id)
-      if (tab === undefined || tab.content === null || !isTextType(tab.contentType) || tab.diff !== undefined) return
+      if (tab === undefined || tab.content === null || tab.diff !== undefined) return
+      // Office tabs (P4): the tab holds the original data URL; the edited
+      // HTML is rebuilt into a fresh package and written as binary.
+      if ((tab.contentType === 'word' || tab.contentType === 'excel' || tab.contentType === 'ppt') && tab.officeEditHtml !== undefined) {
+        const sentEdit = tab.officeEditHtml
+        handle.update((prev) => ({
+          ...prev,
+          tabs: prev.tabs.map((item) => (item.id === id ? { ...item, loading: true, error: null } : item)),
+        }))
+        let base64: string
+        try {
+          const { rebuildOffice } = await import('./preview/office.tsx')
+          base64 = await rebuildOffice(tab.content, tab.contentType, sentEdit)
+        } catch (error) {
+          handle.update((prev) => ({
+            ...prev,
+            tabs: prev.tabs.map((item) => (item.id === id ? { ...item, loading: false, error: error instanceof Error ? error.message : String(error) } : item)),
+          }))
+          return
+        }
+        const result = await api.writeBinary(state.root, tab.path, base64, tab.mtime)
+        handle.update((prev) => {
+          if (prev.root !== state.root) return prev
+          return {
+            ...prev,
+            tabs: prev.tabs.map((item) => {
+              if (item.id !== id) return item
+              if (!result.ok) {
+                return {
+                  ...item,
+                  loading: false,
+                  error: result.error.code === 'write-conflict'
+                    ? '文件已在磁盘上被修改，保存冲突：请刷新后重试'
+                    : result.error.message,
+                }
+              }
+              if (item.officeEditHtml !== sentEdit) {
+                return { ...item, loading: false, mtime: result.value.mtime, error: null }
+              }
+              return { ...item, loading: false, dirty: false, mtime: result.value.mtime, error: null }
+            }),
+          }
+        })
+        return
+      }
+      if (tab.content === null || !isTextType(tab.contentType)) return
       const sentContent = tab.content
       const baseline = tab.baseContent
       handle.update((prev) => ({
@@ -1531,7 +1595,7 @@ export function createPreviewStore(
       }))
       const result = tab.diff !== undefined
         ? await api.gitDiff(state.root, tab.path, tab.diff.staged)
-        : await api.read(state.root, tab.path, tab.contentType === 'image')
+        : await api.read(state.root, tab.path, tab.contentType === 'image' || tab.contentType === 'word' || tab.contentType === 'excel' || tab.contentType === 'ppt')
       handle.update((prev) => {
         if (prev.root !== state.root) return prev
         return {

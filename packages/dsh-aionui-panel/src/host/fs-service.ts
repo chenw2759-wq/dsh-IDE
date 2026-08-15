@@ -463,9 +463,61 @@ export class FsService {
     }
   }
 
-  /** Recursive filename search (case-insensitive substring), pruned at noise dirs. */
-  async search(root: string, query: string): Promise<SearchView | PanelError> {
+  /** Write one BINARY file (base64 payload) — the office editors save rebuilt
+   *  docx/xlsx/pptx packages this way. Same mtime-conflict guard as write. */
+  async writeBinary(
+    root: string,
+    rel: string,
+    base64: string,
+    baseMtime?: number,
+  ): Promise<{ mtime: number } | PanelError> {
+    let buffer: Buffer
+    try {
+      buffer = Buffer.from(base64, 'base64')
+    } catch {
+      return { code: 'write-failed', message: 'invalid base64 payload' }
+    }
     const remote = this.remoteTarget(root)
+    if (remote !== null) {
+      if (isGitPath(rel)) return { code: 'path-outside-root', message: 'refusing to touch .git' }
+      const abs = this.remoteAbs(remote.remoteRoot, rel)
+      if (abs === null) return { code: 'path-outside-root', message: 'path escapes root' }
+      try {
+        const result = await remote.engine.writeFile(remote.alias, abs, buffer, baseMtime)
+        return { mtime: result.mtime }
+      } catch (error) {
+        if (String(error).includes('mtime conflict')) {
+          return { code: 'write-conflict', message: 'file changed on the remote since it was loaded' }
+        }
+        return { code: 'write-failed', message: `cannot write ${rel}` }
+      }
+    }
+    const gated = await this.gate(root)
+    if (!gated.ok) return gated.error
+    if (isGitPath(rel)) return { code: 'path-outside-root', message: 'refusing to touch .git' }
+    const resolved = await resolveInsideRoot(gated.canonical, rel)
+    if (!resolved.ok) return resolved.error
+    try {
+      let current: Awaited<ReturnType<typeof stat>>
+      try {
+        current = await stat(resolved.abs)
+      } catch {
+        current = { mtimeMs: 0 } as Awaited<ReturnType<typeof stat>>
+      }
+      if (baseMtime !== undefined && Number(current.mtimeMs) !== 0 && Math.abs(Number(current.mtimeMs) - baseMtime) > 1) {
+        return { code: 'write-conflict', message: 'file changed on disk since it was loaded' }
+      }
+      await mkdir(dirname(resolved.abs), { recursive: true })
+      await writeFile(resolved.abs, buffer)
+      const info = await stat(resolved.abs)
+      return { mtime: info.mtimeMs }
+    } catch {
+      return { code: 'write-failed', message: `cannot write ${rel}` }
+    }
+  }
+
+  /** Recursive filename search (case-insensitive substring), pruned at noise dirs. */
+  async search(root: string, query: string): Promise<SearchView | PanelError> {    const remote = this.remoteTarget(root)
     if (remote !== null) {
       const needle = query.trim().toLowerCase()
       if (needle === '') return { query, hits: [], truncated: false }

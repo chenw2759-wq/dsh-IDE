@@ -16,6 +16,9 @@ import { t } from '../locales.ts'
 import { hljsLanguageOf } from '../fileType.ts'
 import { readSettings } from '../settings.ts'
 import { renderMarkdown, resolveMarkdownImage } from './markdown.ts'
+import { OfficeViewer } from './office.tsx'
+import { EditableOffice } from './office-editor.tsx'
+import { VisualEditor } from './visual-editor.tsx'
 import previewCss from '../styles/preview.module.css'
 
 /** Escape text for safe injection into a <pre><code> highlight layer. */
@@ -45,6 +48,7 @@ export const KEY_SPLIT_RATIO = 'preview-panel-split-ratio'
 export function TabContent({
   tab,
   viewMode,
+  visualMode = false,
   split,
   onContentChange,
   onSave,
@@ -52,7 +56,8 @@ export function TabContent({
   onSaveEditDiff,
 }: {
   tab: PreviewTabState
-  viewMode: 'source' | 'preview'
+  viewMode: 'source' | 'preview' | 'visual'
+  visualMode?: boolean
   split: boolean
   onContentChange: (content: string) => void
   onSave: () => void
@@ -92,14 +97,20 @@ export function TabContent({
           root={tab.root}
           path={tab.path}
           sourceMode={viewMode === 'source'}
+          visualMode={visualMode}
           onContentChange={onContentChange}
+          onSave={onSave}
+          dirty={tab.dirty}
         />
       )}
       {tab.contentType === 'html' && tab.content !== null && (
         <HtmlViewer
           content={tab.content}
           sourceMode={viewMode === 'source'}
+          visualMode={visualMode}
           onContentChange={onContentChange}
+          onSave={onSave}
+          dirty={tab.dirty}
         />
       )}
       {(tab.contentType === 'code' || tab.contentType === 'text') && tab.content !== null && (
@@ -124,8 +135,11 @@ export function TabContent({
         <ImageViewer src={tab.content} meta={`${tab.image?.width ?? ''}${tab.image ? ' x ' : ''}${tab.image?.height ?? ''}`} />
       )}
       {tab.contentType === 'pdf' && tab.content !== null && <PdfViewer dataUrl={tab.content} title={tab.title} />}
+      {tab.contentType === 'word' && tab.content !== null && <OfficeTab tab={tab} contentType="word" onContentChange={onContentChange} onSave={onSave} />}
+      {tab.contentType === 'excel' && tab.content !== null && <OfficeTab tab={tab} contentType="excel" onContentChange={onContentChange} onSave={onSave} />}
+      {tab.contentType === 'ppt' && tab.content !== null && <OfficeTab tab={tab} contentType="ppt" onContentChange={onContentChange} onSave={onSave} />}
       {tab.contentType === 'url' && <UrlViewer tab={tab} />}
-      {(tab.contentType === 'word' || tab.contentType === 'excel' || tab.contentType === 'ppt' || tab.contentType === 'unsupported') && (
+      {(tab.contentType === 'unsupported') && (
         <UnsupportedViewer tab={tab} />
       )}
       {tab.content === null && !tab.loading && (
@@ -137,6 +151,31 @@ export function TabContent({
       {tab.loading && <div className={previewCss.placeholder}>{t('scm.loading')}</div>}
     </div>
   )
+}
+
+/** Office tab: read-only preview, or in-frame editing (P4) when armed. The
+ *  editing surface re-uses the parsed HTML and rebuilds the package on save. */
+function OfficeTab({ tab, contentType, onContentChange, onSave }: {
+  tab: PreviewTabState
+  contentType: 'word' | 'excel' | 'ppt'
+  onContentChange: (content: string) => void
+  onSave: () => void
+}): JSX.Element {
+  if (tab.officeEditHtml !== undefined) {
+    return (
+      <EditableOffice
+        html={tab.officeEditHtml}
+        contentType={contentType}
+        dirty={tab.dirty}
+        onEdited={() => {
+          const el = document.querySelector<HTMLElement>('[data-aionui-office-editable]')
+          if (el !== null) onContentChange(el.innerHTML)
+        }}
+        onSave={onSave}
+      />
+    )
+  }
+  return <OfficeViewer dataUrl={tab.content ?? ''} contentType={contentType} />
 }
 
 /** Split screen: textarea editor | rendered preview, ratio persisted. */
@@ -190,13 +229,16 @@ function SplitPane({
   )
 }
 
-/** Markdown viewer with an optional source mode (textarea). */
+/** Markdown viewer with an optional source mode (textarea) and visual mode. */
 function MarkdownViewer({
   content,
   root,
   path,
   sourceMode = false,
+  visualMode = false,
   onContentChange,
+  onSave,
+  dirty = false,
 }: {
   content: string
   /** Project root of the markdown file (image srcs resolve against it). */
@@ -204,7 +246,10 @@ function MarkdownViewer({
   /** The markdown file's workspace-relative path (image dir base). */
   path: string
   sourceMode?: boolean
+  visualMode?: boolean
   onContentChange?: (content: string) => void
+  onSave?: () => void
+  dirty?: boolean
 }): JSX.Element {
   const resolveImageSrc = useCallback((src: string): string | null => {
     if (root === '' || path === '') return null
@@ -219,6 +264,16 @@ function MarkdownViewer({
     () => renderMarkdown(content, { resolveImageSrc }),
     [content, resolveImageSrc],
   )
+  if (visualMode && onContentChange !== undefined && onSave !== undefined) {
+    return (
+      <VisualEditor
+        html={html}
+        dirty={dirty}
+        onEdited={(next) => onContentChange(next)}
+        onSave={onSave}
+      />
+    )
+  }
   if (sourceMode && onContentChange !== undefined) {
     return (
       <div className={previewCss.content}>
@@ -238,16 +293,32 @@ function MarkdownViewer({
 function HtmlViewer({
   content,
   sourceMode = false,
+  visualMode = false,
   onContentChange,
+  onSave,
+  dirty = false,
 }: {
   content: string
   sourceMode?: boolean
+  visualMode?: boolean
   onContentChange?: (content: string) => void
+  onSave?: () => void
+  dirty?: boolean
 }): JSX.Element {
   const srcDoc = useMemo(() => {
     // Base styles so the embedded page inherits the theme background.
     return `<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;font-family:-apple-system,"system-ui","Segoe UI",Roboto,"PingFang SC",sans-serif;color:#1d2129}@media (prefers-color-scheme:dark){body{color:rgba(255,255,255,0.9)}}</style></head><body>${content}</body></html>`
   }, [content])
+  if (visualMode && onContentChange !== undefined && onSave !== undefined) {
+    return (
+      <VisualEditor
+        html={content}
+        dirty={dirty}
+        onEdited={(next) => onContentChange(next)}
+        onSave={onSave}
+      />
+    )
+  }
   if (sourceMode && onContentChange !== undefined) {
     return (
       <div className={previewCss.content}>

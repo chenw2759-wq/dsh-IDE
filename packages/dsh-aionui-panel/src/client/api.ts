@@ -52,6 +52,12 @@ export class PanelApi {
     return post('/aionui-panel/write', { root, path, content, baseMtime })
   }
 
+  /** Write a BINARY file back (base64 payload) — office editors save rebuilt
+   *  docx/xlsx/pptx packages this way. */
+  writeBinary(root: string, path: string, base64: string, baseMtime?: number): Promise<PanelEnvelope<{ mtime: number }>> {
+    return post('/aionui-panel/write-binary', { root, path, base64, baseMtime })
+  }
+
   /** Filename search under the root. */
   search(root: string, query: string): Promise<PanelEnvelope<SearchView>> {
     return post('/aionui-panel/search', { root, query })

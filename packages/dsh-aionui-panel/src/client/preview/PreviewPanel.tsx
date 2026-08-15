@@ -27,7 +27,7 @@ export function PreviewPanel({ stores }: { stores: PanelStores }): JSX.Element {
   const layoutState = useStore(stores.layout)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [closingIds, setClosingIds] = useState<string[] | null>(null)
-  const [viewMode, setViewMode] = useState<'source' | 'preview'>('preview')
+  const [viewMode, setViewMode] = useState<'source' | 'preview' | 'visual'>('preview')
   const [split, setSplit] = useState(false)
   const [terminal, setTerminal] = useState<{ open: boolean; command?: string }>({ open: false })
   const lastDirtyCheck = useRef<Set<string>>(new Set())
@@ -164,10 +164,28 @@ export function PreviewPanel({ stores }: { stores: PanelStores }): JSX.Element {
             onDownload={() => downloadTab(activeTab)}
             onRun={() => runActiveFile()}
             onOpenTerminal={() => setTerminal({ open: true })}
+            visualMode={viewMode === 'visual'}
+            onToggleVisualMode={() => setViewMode(viewMode === 'visual' ? 'preview' : 'visual')}
+            officeEditing={activeTab.officeEditHtml !== undefined}
+            onToggleOfficeEdit={() => {
+              if (activeTab.officeEditHtml !== undefined) {
+                // Exit edit mode: back to the read-only preview.
+                preview.setOfficeEditHtml(activeTab.id, undefined)
+                return
+              }
+              // Enter edit mode: parse the CURRENT data URL into editable
+              // HTML, then arm the contenteditable surface.
+              void (async () => {
+                const { renderOffice } = await import('./office.tsx')
+                const html = await renderOffice(activeTab.content ?? '', activeTab.contentType as 'word' | 'excel' | 'ppt')
+                preview.setOfficeEditHtml(activeTab.id, html)
+              })()
+            }}
           />
           <TabContent
             tab={activeTab}
             viewMode={viewMode}
+            visualMode={viewMode === 'visual'}
             split={split}
             onContentChange={(content) => preview.updateContent(activeTab.id, content)}
             onSave={() => void preview.saveTab(activeTab.id)}

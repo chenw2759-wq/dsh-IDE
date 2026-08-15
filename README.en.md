@@ -129,6 +129,26 @@ Log files (gray tab) preview directly in the panel.
 `.R` / `.r` scripts run with **Rscript** (▶ Run), R tabs use the official R blue; `.Rmd` (R Markdown)
 renders as Markdown; syntax highlighting supports R natively.
 
+### 📄 Office Preview (docx / xlsx / pptx)
+
+- **docx**: paragraphs / tables / bold / italic / underline / color / size / highlight / alignment rendered
+- **xlsx**: first worksheet rendered as a table (shared strings resolved)
+- **pptx**: one card per slide
+- Client-side ZIP parsing — no host dependencies, no dsh restart
+
+### ✏️ In-frame Rich Editing (Office)
+
+The toolbar's "Edit" arms contenteditable editing: the toolbar shows only the tools checked in
+Settings (font / size / bold-italic / align / underline / color / highlight / spacing / margins); saving
+rebuilds the docx/xlsx/pptx from the edited HTML and writes it back as binary (mtime-conflict guarded).
+Known limit: complex layouts (headers/footers, merged cells) are not preserved.
+
+### 🎨 HTML / Markdown Visual Editing (PowerPoint-style)
+
+The toolbar's "Visual editing" opens a canvas where every content block is a **text box** — drag to
+move, drag the corner to resize, edit text inline, **add / delete boxes**, change **text color /
+background / font size / bold**; saving writes back an inline-styled HTML document.
+
 ### 🚀 SSH Remote Development (Local Brain, Remote Hands)
 
 - **Seam switching**: a profile patch routes `ctx.fs` / `ctx.subprocess` through a mode facade — local mode
@@ -142,6 +162,11 @@ renders as Markdown; syntax highlighting supports R natively.
 - **Multiple hosts**: configure many hosts in the GUI (ProxyJump chains, passphrase keys), one-click
   switching; a settings-page management section (add / edit / delete / test / enter-exit) persists to
   `~/.dsh/dsh-ssh.json`.
+- **Rounded pill buttons + multi-host picker**: the session-header SSH button is a rounded pill
+  (brand-tinted while remote); the connect dialog lists saved hosts on top — click to enter any of them.
+- **Per-session SSH isolation**: every session remembers its own device and mode; switching sessions
+  restores it (different sessions can be remote on different hosts or local). Limitation: the host-side
+  fs/subprocess seams route on the global mode; isolation applies to the panel and explicit remote_* tools.
 - **Symlink following**: the remote file tree resolves symlinked directories correctly (e.g. AutoDL's
   `/root/autodl-tmp`).
 - **Explicit remote tools**: `remote_status` / `remote_ls` / `remote_read` / `remote_write` /
