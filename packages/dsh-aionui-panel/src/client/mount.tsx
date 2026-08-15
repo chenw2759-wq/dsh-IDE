@@ -17,6 +17,7 @@ import { TerminalPanel } from './preview/TerminalPanel.tsx'
 const EXPLORER_COL_SELECTOR = '[data-aionui-explorer-col]'
 const PREVIEW_COL_SELECTOR = '[data-aionui-preview-col]'
 const TERMINAL_HOST_SELECTOR = '[data-aionui-terminal-host]'
+const TREE_POPUP_BODY_SELECTOR = '[data-aionui-tree-popup-body]'
 
 /** Terminal wrapper: follows the active project root as sessions switch. */
 function TerminalMounter({ stores }: { stores: PanelStores }): JSX.Element {
@@ -55,6 +56,7 @@ export function mountPanels(stores: PanelStores, onToggleExplorer: () => void): 
   let explorerRoot: Root | undefined
   let previewRoot: Root | undefined
   let terminalRoot: Root | undefined
+  let popupRoot: Root | undefined
   const disposers: Array<() => void> = []
 
   disposers.push(waitForElement(EXPLORER_COL_SELECTOR, (el) => {
@@ -69,11 +71,25 @@ export function mountPanels(stores: PanelStores, onToggleExplorer: () => void): 
     terminalRoot = createRoot(el)
     terminalRoot.render(<TerminalMounter stores={stores} />)
   }))
+  // The focus tree popup mounts the SAME ExplorerPanel (shared stores), so the
+  // floating window shows the live tree + search + git badges. Its collapse
+  // chevron re-docks the tree (expands) and dismisses the popup.
+  disposers.push(waitForElement(TREE_POPUP_BODY_SELECTOR, (el) => {
+    popupRoot = createRoot(el)
+    popupRoot.render(<ExplorerPanel
+      stores={stores}
+      onToggleCollapse={() => {
+        onToggleExplorer()
+        stores.layout.setTreePopupOpen(false)
+      }}
+    />)
+  }))
 
   return () => {
     for (const dispose of disposers) dispose()
     explorerRoot?.unmount()
     previewRoot?.unmount()
     terminalRoot?.unmount()
+    popupRoot?.unmount()
   }
 }

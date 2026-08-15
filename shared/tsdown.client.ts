@@ -273,6 +273,16 @@ function clientConfig(id: string, entry: string): UserConfig {
           code: source,
           cssModules: { pattern: '[hash]_[local]' },
           minify: true,
+          // Target the browsers the DSH web GUI actually ships (current Edge /
+          // Chromium + Safari): without explicit targets lightningcss assumes
+          // old defaults and rewrites modern properties (e.g. backdrop-filter)
+          // into prefixed-only forms that the GUI does not apply.
+          targets: {
+            chrome: 120 << 16,
+            safari: 16 << 16,
+            firefox: 120 << 16,
+            edge: 120 << 16,
+          },
         })
         const classMap: Record<string, string> = {}
         // Sort deterministically: lightningcss's cssExports iteration order is

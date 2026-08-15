@@ -157,6 +157,19 @@
   border-top: 1px solid var(--aion-bg-3);
 }
 
+/* Floating preview pane: the tab-bar strip is the grab area (grab cursor);
+   while a drag is in flight the controller marks the pane so no transition
+   fights the pointer. */
+:global(.aionui-preview-col.aionui-float-pane [data-aionui-float-drag]) {
+  cursor: grab;
+}
+:global(.aionui-preview-col.aionui-float-pane [data-aionui-float-drag]:active) {
+  cursor: grabbing;
+}
+:global(.aionui-preview-col[data-aionui-float-dragging]) {
+  transition: none !important;
+}
+
 /* The horizontal preview-height handle (hit zone + visual line). */
 :global(.aionui-preview-height-handle) {
   background: transparent;
@@ -263,6 +276,119 @@
 :global(.aionui-floating-expand:focus-visible) {
   outline: 2px solid var(--aion-primary);
   outline-offset: 2px;
+}
+
+/* Side-mode middle handle (tree | preview boundary): a vertical width handle.
+   The base class keeps the horizontal line; this variant draws a vertical
+   brand line so dragging the PREVIEW's left edge reads clearly. */
+:global(.aionui-preview-width-handle) {
+  position: relative;
+  touch-action: none;
+}
+:global(.aionui-preview-width-handle::after) {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  border-radius: 9999px;
+  background-color: var(--aion-bg-3);
+  transition: width 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+:global(.aionui-preview-width-handle:hover::after),
+:global(.aionui-preview-width-handle:active::after) {
+  width: 6px;
+  background-color: var(--aion-brand);
+}
+
+/* Focus tree popup: a small movable frosted window floating over the preview
+   (pulled out by the topmost expand button while the tree is folded). */
+:global(.aionui-tree-popup) {
+  position: fixed;
+  z-index: 500;
+  display: none;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid var(--aion-bg-3);
+  background: color-mix(in srgb, var(--aion-bg-1) 82%, transparent);
+  backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+}
+:global(.aionui-tree-popup[data-aionui-tree-popup-dragging]) {
+  user-select: none;
+}
+:global(.aionui-tree-popup-header) {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: grab;
+  border-bottom: 1px solid var(--aion-bg-3);
+  background: color-mix(in srgb, var(--aion-bg-2) 70%, transparent);
+  user-select: none;
+}
+:global(.aionui-tree-popup-header:active) {
+  cursor: grabbing;
+}
+:global(.aionui-tree-popup-title) {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--aion-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:global(.aionui-tree-popup-close) {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--aion-text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+:global(.aionui-tree-popup-close:hover) {
+  background-color: var(--aion-bg-3);
+  color: var(--aion-text-primary);
+}
+:global(.aionui-tree-popup-body) {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+:global(.aionui-tree-popup-body > .aionui-root) {
+  flex: 1 1 0;
+  min-height: 0;
+}
+/* Popup entrance animation. */
+@keyframes aionui-tree-popup-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+:global(.aionui-tree-popup) {
+  animation: aionui-tree-popup-in 160ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* The collapse chevron inside the explorer tab bar (top-right). */

@@ -191,10 +191,17 @@ export interface LayoutState {
   dragging: boolean
   /** Integrated terminal: docked at the bottom fifth of the CHAT column. */
   terminalOpen: boolean
+  /** Focus popup: when the tree is collapsed beside an open preview, the
+   *  topmost expand button opens this small movable floating file-tree window
+   *  (rounded, frosted) instead of re-docking the tree column. */
+  treePopupOpen: boolean
 }
 
 /** Storage key of the floating-pane position (global, JSON {x,y} or null). */
 export const KEY_FLOAT_POS = 'aionui-float-pos'
+
+/** Storage key of the tree-popup position (global, JSON {x,y}). */
+export const KEY_TREE_POPUP_POS = 'aionui-tree-popup-pos'
 
 /** The layout store plus its pure width math. */
 export interface LayoutStore extends StateHandle<LayoutState> {
@@ -212,6 +219,8 @@ export interface LayoutStore extends StateHandle<LayoutState> {
   setFloatPos: (pos: { x: number; y: number } | null) => void
   /** Open / close the integrated terminal. */
   setTerminalOpen: (open: boolean) => void
+  /** Open / close the focus tree popup. */
+  setTreePopupOpen: (open: boolean) => void
 }
 
 /** Storage key of the preview-mode preference (global, not per-root). */
@@ -239,6 +248,7 @@ export function createLayoutStore(
     availableWidth: 0,
     dragging: false,
     terminalOpen: false,
+    treePopupOpen: false,
   })
   const store: LayoutStore = Object.assign(handle, {
     explorerWidthPx(state: LayoutState): number {
@@ -293,6 +303,9 @@ export function createLayoutStore(
     setTerminalOpen(open: boolean): void {
       handle.update((prev) => (prev.terminalOpen === open ? prev : { ...prev, terminalOpen: open }))
     },
+    setTreePopupOpen(open: boolean): void {
+      handle.update((prev) => (prev.treePopupOpen === open ? prev : { ...prev, treePopupOpen: open }))
+    },
   })
   return store
 }
@@ -302,6 +315,19 @@ function readFloatPos(): { x: number; y: number } | null {
   try {
     const raw = localStorage.getItem(KEY_FLOAT_POS)
     if (raw === null || raw === '') return null
+    const parsed = JSON.parse(raw) as { x?: number; y?: number }
+    if (typeof parsed.x === 'number' && typeof parsed.y === 'number') return { x: parsed.x, y: parsed.y }
+    return null
+  } catch {
+    return null
+  }
+}
+
+/** Read the persisted focus-popup position (absent/invalid = default slot). */
+export function readTreePopupPos(): { x: number; y: number } | null {
+  try {
+    const raw = localStorage.getItem(KEY_TREE_POPUP_POS)
+    if (raw === null) return null
     const parsed = JSON.parse(raw) as { x?: number; y?: number }
     if (typeof parsed.x === 'number' && typeof parsed.y === 'number') return { x: parsed.x, y: parsed.y }
     return null
