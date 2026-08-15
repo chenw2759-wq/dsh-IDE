@@ -1,9 +1,26 @@
-﻿# dsh-easyssh bundle patch: inserts the plugin row into the web
-# profile roster. Applied as a profile bundle layer (the `dsh.bundle.patch`
-# manifest field) over dsh-base; the node half (exports ".") runs in the host
-# process (mode store, /api/dsh-easyssh routes, remote_* agent tools),
-# and the `dsh.client` declaration in package.json makes the browser half
-# (exports "./client", served at /plugins/<id>/client.js) load in the web GUI.
+# dsh-easyssh bundle patch: inserts the plugin row into the web
+# profile roster, and performs the SSH seam switch — disable the deployment's
+# local filesystem/subprocess providers and mount the mode-routing facades
+# (easyssh-fs / easyssh-subprocess) instead. Applied automatically as a
+# profile bundle layer (the `dsh.bundle.patch` manifest field) when this
+# package is installed — NO manual cordis.patch.yml editing needed.
+#
+# In SSH mode the model's read/write/edit/bash tools execute on the remote
+# host transparently; in local mode the facades delegate to the same sandboxed
+# local implementations the disabled rows mounted.
 - insert:
     - id: easyssh
       name: 'dsh-easyssh'
+
+- id: fs-sandbox
+  disabled: true
+
+- id: subprocess
+  disabled: true
+
+- insert:
+    - id: easyssh-fs
+      name: 'dsh-easyssh/fs'
+
+    - id: easyssh-subprocess
+      name: 'dsh-easyssh/subprocess'

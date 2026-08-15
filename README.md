@@ -169,21 +169,15 @@ dsh plugin --profile web add file:C:/你的路径/dsh-IDE/packages/dsh-easyssh
 
 > 仓库品牌为 dsh-IDE；核心插件包名沿用 `dsh-easyssh`（安装标识，不随品牌改名）。
 
-### ⚠️ 第 3 步：接缝切换补丁（关键）
+### 第 3 步：接缝切换（自动，无需手动）
 
-打开 `<profile>/cordis.patch.yml`（Windows 默认 `C:\Users\<你>\.dsh\profiles\web\cordis.patch.yml`），写入：
+安装 dsh-easyssh 时，其自带的 `cordis.patch.yml`（经 `dsh.bundle.patch` 声明）会作为 profile
+bundle 层**自动应用**：禁用部署自带的 `fs-sandbox` / `subprocess`，挂载模式路由门面
+`easyssh-fs` / `easyssh-subprocess`（SSH 模式下模型工具透明地远程执行；本地模式委托回同一套
+沙箱实现）。**不需要手动编辑 `<profile>/cordis.patch.yml`**。
 
-```yaml
-- id: fs-sandbox
-  disabled: true
-- id: subprocess
-  disabled: true
-- insert:
-  - id: easyssh-fs
-    name: 'dsh-easyssh/fs'
-  - id: easyssh-subprocess
-    name: 'dsh-easyssh/subprocess'
-```
+> 旧版本（0.1.0 之前）安装时需要手动写入接缝补丁；若你的 profile 里已有手写补丁，删除它即可
+> （自动补丁内容一致，行 id 相同，幂等无冲突）。
 
 ### 第 4 步：重启
 

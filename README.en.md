@@ -184,21 +184,16 @@ dsh plugin --profile web add file:C:/your-path/dsh-IDE/packages/dsh-easyssh
 
 > The repo is branded dsh-IDE; the core plugin package keeps the install id `dsh-easyssh`.
 
-### ⚠️ Step 3: seam-switch patch (critical)
+### Step 3: seam switch (automatic — nothing to edit)
 
-Open `<profile>/cordis.patch.yml` (Windows default `C:\Users\<you>\.dsh\profiles\web\cordis.patch.yml`) and write:
+Installing dsh-easyssh automatically applies its bundled `cordis.patch.yml` (declared via
+`dsh.bundle.patch`) as a profile bundle layer: it disables the deployment's `fs-sandbox` /
+`subprocess` and mounts the mode-routing facades `easyssh-fs` / `easyssh-subprocess` (in SSH mode the
+model's tools execute remotely; in local mode the facades delegate back to the same sandboxed local
+implementations). **No manual `<profile>/cordis.patch.yml` editing is required.**
 
-```yaml
-- id: fs-sandbox
-  disabled: true
-- id: subprocess
-  disabled: true
-- insert:
-  - id: easyssh-fs
-    name: 'dsh-easyssh/fs'
-  - id: easyssh-subprocess
-    name: 'dsh-easyssh/subprocess'
-```
+> Versions before 0.1.0 needed a hand-written seam patch; if your profile still carries one, you can
+> delete it — the automatic patch is identical (same row ids, idempotent).
 
 ### Step 4: restart
 
