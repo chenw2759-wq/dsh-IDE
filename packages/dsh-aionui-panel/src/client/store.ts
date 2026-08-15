@@ -317,6 +317,32 @@ export function readExplorerUi(root: string): { expanded: string[]; selected: st
 
 const EMPTY_SEARCH = { query: '', status: 'idle' as const, hits: [], truncated: false }
 
+/**
+ * True when a relative path is build/process noise that must NEVER auto-open:
+ * dependency dirs, build outputs, temp/editor droppings, lockfiles. Logs are
+ * deliberately NOT noise (log preview is a feature).
+ */
+function isNoisePath(rel: string): boolean {
+  const parts = rel.split('/')
+  const NOISE_DIRS = new Set([
+    'node_modules', '.git', 'dist', 'build', 'out', 'lib', 'coverage', '__pycache__',
+    '.next', '.nuxt', '.cache', '.pytest_cache', '.mypy_cache', '.turbo',
+    '.idea', '.vscode', '.venv', 'venv', 'tmp', '.tmp',
+  ])
+  if (parts.some((part) => NOISE_DIRS.has(part))) return true
+  const base = (parts[parts.length - 1] ?? rel).toLowerCase()
+  if (base.endsWith('.map') || base.endsWith('.tsbuildinfo') || base.endsWith('.pyc')
+    || base.endsWith('.pyo') || base.endsWith('.class') || base.endsWith('.o')
+    || base.endsWith('.obj') || base.endsWith('.exe') || base.endsWith('.dll')
+    || base.endsWith('.so') || base.endsWith('.dylib') || base.endsWith('.tmp')
+    || base.endsWith('.temp') || base.endsWith('.swp') || base.endsWith('.swo')) return true
+  if (base === 'package-lock.json' || base === 'pnpm-lock.yaml' || base === 'yarn.lock'
+    || base === 'bun.lockb' || base === 'poetry.lock' || base === '.ds_store'
+    || base === 'thumbs.db') return true
+  if (base.startsWith('~$')) return true
+  return false
+}
+
 /** Create the explorer store (per-root persistence, debounced writes). */
 export function createExplorerStore(api: PanelApi): ExplorerStore {
   const handle = createState<ExplorerState>({
@@ -1384,13 +1410,9 @@ export function createPreviewStore(api: PanelApi, onAutoDiff?: () => void): Prev
       // that is not open yet — pop it open so the edit is immediately visible
       // (vibecoding behavior). EVERY modified file auto-opens, whatever its
       // type (code, text, csv, image, office…) — except dependency/ignored
-      // noise (.git internals, node_modules) whose churn is not the user's
-      // working code. The host's cached previous content becomes the
-      // baseline, so the very first read already diffs against the old state
-      // for text kinds.
-      if (rel !== undefined && rel !== '' && !rel.includes('\u0000')
-        && !rel.toLowerCase().includes('.git')
-        && !rel.split('/').includes('node_modules')) {
+      // noise (dependency dirs, build outputs, temp files, lockfiles) whose
+      // churn is never the user's working code.
+      if (rel !== undefined && rel !== '' && !rel.includes('\u0000') && !isNoisePath(rel)) {
         const root = handle.getSnapshot().root
         const openTabs = handle.getSnapshot().tabs
         const alreadyOpen = openTabs.some((tab) => tab.root === root && tab.path === rel)
