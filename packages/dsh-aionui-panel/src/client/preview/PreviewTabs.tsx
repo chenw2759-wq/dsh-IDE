@@ -106,8 +106,16 @@ export function PreviewTabs({
             tabIndex={0}
             title={tab.path}
             aria-label={tab.title}
-            draggable={onMoveTab !== undefined}
+            // In float mode the tab strip is the floating-pane drag handle
+            // (pointer gesture) — HTML5 tab-reordering must yield, otherwise
+            // the browser's native drag swallows pointermove and the pane
+            // never moves. Every other mode keeps tab drag-reorder.
+            draggable={onMoveTab !== undefined && previewMode !== 'float'}
             onDragStart={(event) => {
+              if (previewMode === 'float') {
+                event.preventDefault()
+                return
+              }
               dragId.current = tab.id
               event.dataTransfer.effectAllowed = 'move'
               try { event.dataTransfer.setData('text/plain', tab.id) } catch { /* some browsers throw on custom data */ }
