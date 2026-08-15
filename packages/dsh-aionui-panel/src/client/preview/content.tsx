@@ -9,11 +9,32 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { JSX } from 'react'
+import hljs from 'highlight.js'
 import type { PreviewTabState } from '../store.ts'
 import { useResizableSplit } from '../hooks/useResizableSplit.ts'
 import { t } from '../locales.ts'
+import { hljsLanguageOf } from '../fileType.ts'
 import { renderMarkdown, resolveMarkdownImage } from './markdown.ts'
 import previewCss from '../styles/preview.module.css'
+
+/** Escape text for safe injection into a <pre><code> highlight layer. */
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/** Cap above which highlighting is skipped (very large files fall back to plain text). */
+const HIGHLIGHT_CAP = 200_000
+
+/** Highlight one text (escaped fallback on unknown language or oversize). */
+function highlightHtml(content: string, language: string | undefined): string {
+  if (language === undefined || content.length > HIGHLIGHT_CAP) return escapeHtml(content)
+  try {
+    if (hljs.getLanguage(language) === undefined) return escapeHtml(content)
+    return hljs.highlight(content, { language }).value
+  } catch {
+    return escapeHtml(content)
+  }
+}
 
 /** Split-ratio persistence key (AionUi contract). */
 export const KEY_SPLIT_RATIO = 'preview-panel-split-ratio'
@@ -84,6 +105,7 @@ export function TabContent({
           content={tab.content}
           onContentChange={onContentChange}
           onSave={onSave}
+          language={hljsLanguageOf(tab.path)}
         />
       )}
       {tab.contentType === 'csv' && tab.content !== null && <CsvViewer content={tab.content} />}
@@ -143,6 +165,7 @@ function SplitPane({
             content={content}
             onContentChange={onContentChange}
             onSave={onSave}
+            language={hljsLanguageOf(tab.path)}
           />
         </div>
       </div>
@@ -238,21 +261,14 @@ function HtmlViewer({
   return <iframe className={previewCss.pdfViewer} srcDoc={srcDoc} sandbox="" title="html preview" />
 }
 
-/** Plain code/text viewer — zebra-striped lines with gutter numbers. */
+/** Syntax-highlighted read-only code viewer (split preview side). */
 function CodeViewer({ content, language }: { content: string; language: string }): JSX.Element {
-  void language
-  const lines = useMemo(() => content.split('\n'), [content])
+  const html = useMemo(() => highlightHtml(content, hljsLanguageOf(language)), [content, language])
   return (
     <div className={previewCss.codeViewer}>
-      {lines.map((line, index) => (
-        <div
-          key={index}
-          className={`${previewCss.codeLine}${index % 2 === 1 ? ` ${previewCss.codeLineAlt}` : ''}`}
-        >
-          <span className={previewCss.codeGutter}>{index + 1}</span>
-          <span className={previewCss.codeText}>{line === '' ? '\u00a0' : line}</span>
-        </div>
-      ))}
+      <pre className={previewCss.codeHighlight} aria-hidden="true">
+        <code dangerouslySetInnerHTML={{ __html: html }} />
+      </pre>
     </div>
   )
 }
@@ -260,24 +276,34 @@ function CodeViewer({ content, language }: { content: string; language: string }
 /**
  * A read-write code editor: a numbered gutter plus an editable textarea whose
  * background paints the zebra stripes, so every line keeps an alternating
- * tint even while typing (JupyterLab/Trae-style). Gutter and textarea share
- * one line-height; scroll stays in sync through a ref.
+ * tint even while typing (JupyterLab/Trae-style). A syntax-highlight layer
+ * sits BEHIND a transparent-text textarea, so the caret/selection stay native
+ * while the code renders in full color. Gutter, highlight layer and textarea
+ * share one line-height; scroll stays in sync through refs.
  */
 export function CodeEditor({
   content,
   onContentChange,
   onSave,
+  language,
 }: {
   content: string
   onContentChange: (content: string) => void
   onSave: () => void
+  /** highlight.js language id (undefined = plain text). */
+  language?: string
 }): JSX.Element {
   const lineCount = useMemo(() => content.split('\n').length, [content])
   const gutterRef = useRef<HTMLDivElement>(null)
+  const highlightRef = useRef<HTMLPreElement>(null)
+  const html = useMemo(() => highlightHtml(content, language), [content, language])
 
-  const syncGutter = (event: React.UIEvent<HTMLTextAreaElement>): void => {
-    if (gutterRef.current !== null) {
-      gutterRef.current.scrollTop = event.currentTarget.scrollTop
+  const syncScroll = (event: React.UIEvent<HTMLTextAreaElement>): void => {
+    const { scrollTop, scrollLeft } = event.currentTarget
+    if (gutterRef.current !== null) gutterRef.current.scrollTop = scrollTop
+    if (highlightRef.current !== null) {
+      highlightRef.current.scrollTop = scrollTop
+      highlightRef.current.scrollLeft = scrollLeft
     }
   }
 
@@ -288,19 +314,27 @@ export function CodeEditor({
           <div key={index} className={previewCss.codeEditorLineNo}>{index + 1}</div>
         ))}
       </div>
-      <textarea
-        className={previewCss.textEditor}
-        value={content}
-        spellCheck={false}
-        onChange={(event) => onContentChange(event.target.value)}
-        onScroll={syncGutter}
-        onKeyDown={(event) => {
-          if ((event.metaKey || event.ctrlKey) && event.key === 's') {
-            event.preventDefault()
-            onSave()
-          }
-        }}
-      />
+      <div className={previewCss.codeEditorBody}>
+        <pre ref={highlightRef} className={previewCss.codeHighlight} aria-hidden="true">
+          <code dangerouslySetInnerHTML={{ __html: html + '\n' }} />
+        </pre>
+        <textarea
+          className={`${previewCss.textEditor} ${previewCss.editorTransparent}`}
+          value={content}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoComplete="off"
+          autoCorrect="off"
+          onChange={(event) => onContentChange(event.target.value)}
+          onScroll={syncScroll}
+          onKeyDown={(event) => {
+            if ((event.metaKey || event.ctrlKey) && event.key === 's') {
+              event.preventDefault()
+              onSave()
+            }
+          }}
+        />
+      </div>
     </div>
   )
 }
@@ -446,6 +480,44 @@ function DiffViewer({
   const gutterWidth = showGutter ? 64 : 0
   const [editorOpen, setEditorOpen] = useState(editContent !== undefined && added === 0 && removed > 0)
   const editable = editContent !== undefined && onEdit !== undefined && onSaveEdit !== undefined
+  // EDIT MODE: the editor COVERS the whole preview box (the diff view is
+  // hidden behind it) — clicking edit must give you the full frame to type
+  // in, not a second pane squeezed under the diff.
+  if (editable && editorOpen) {
+    return (
+      <div className={previewCss.diffViewer}>
+        <div className={previewCss.diffEditorFull}>
+          <div className={previewCss.diffEditorHeader}>
+            <span className={previewCss.diffEditorTitle}>
+              {path !== undefined ? `Update(${path})` : 'Update'} — {t('preview.editor')}
+            </span>
+            <span className={previewCss.diffEditorActions}>
+              <button
+                className={previewCss.diffEditBack}
+                onClick={() => setEditorOpen(false)}
+                type="button"
+              >
+                返回 diff
+              </button>
+              <button
+                className={previewCss.diffEditSave}
+                onClick={() => onSaveEdit?.()}
+                type="button"
+              >
+                {t('preview.save')}
+              </button>
+            </span>
+          </div>
+          <CodeEditor
+            content={editContent ?? ''}
+            onContentChange={(text) => onEdit?.(text)}
+            onSave={() => onSaveEdit?.()}
+            language={hljsLanguageOf(path ?? '')}
+          />
+        </div>
+      </div>
+    )
+  }
   return (
     <div className={previewCss.diffViewer}>
       {(added > 0 || removed > 0) && (
@@ -461,10 +533,10 @@ function DiffViewer({
           {editable && (
             <button
               className={previewCss.diffEditToggle}
-              onClick={() => setEditorOpen((open) => !open)}
+              onClick={() => setEditorOpen(true)}
               type="button"
             >
-              {editorOpen ? '收起编辑' : '编辑最新版本'}
+              编辑最新版本
             </button>
           )}
         </div>
@@ -498,25 +570,6 @@ function DiffViewer({
           </div>
         )
       })}
-      {editable && editorOpen && (
-        <div className={previewCss.diffEditor}>
-          <div className={previewCss.diffEditorHeader}>
-            <span>{t('preview.editor')}</span>
-            <button
-              className={previewCss.diffEditSave}
-              onClick={() => onSaveEdit?.()}
-              type="button"
-            >
-              {t('preview.save')}
-            </button>
-          </div>
-          <CodeEditor
-            content={editContent ?? ''}
-            onContentChange={(text) => onEdit?.(text)}
-            onSave={() => onSaveEdit?.()}
-          />
-        </div>
-      )}
     </div>
   )
 }

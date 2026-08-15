@@ -47,17 +47,19 @@ export function PreviewPanel({ stores }: { stores: PanelStores }): JSX.Element {
     const ext = activeTab.title.split('.').pop()?.toLowerCase() ?? ''
     const runner = ext === 'py'
       ? 'python'
-      : ext === 'js' || ext === 'mjs' || ext === 'cjs'
-        ? 'node'
-        : ext === 'sh' || ext === 'bash'
-          ? 'bash'
-          : ext === 'ps1'
-            ? 'powershell -File'
-            : ext === 'go'
-              ? 'go run'
-              : ext === 'rs'
-                ? 'cargo run --'
-                : undefined
+      : ext === 'r' || ext === 'rmd'
+        ? 'Rscript'
+        : ext === 'js' || ext === 'mjs' || ext === 'cjs'
+          ? 'node'
+          : ext === 'sh' || ext === 'bash'
+            ? 'bash'
+            : ext === 'ps1'
+              ? 'powershell -File'
+              : ext === 'go'
+                ? 'go run'
+                : ext === 'rs'
+                  ? 'cargo run --'
+                  : undefined
     const command = runner === undefined ? undefined : `${runner} ${activeTab.path}`
     setTerminal({ open: true, command })
   }

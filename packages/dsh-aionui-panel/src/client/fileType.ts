@@ -8,7 +8,7 @@
 import type { PreviewContentType } from '../core/types.ts'
 
 /** Markdown extensions. */
-const MARKDOWN_EXT = new Set(['md', 'markdown', 'mdx'])
+const MARKDOWN_EXT = new Set(['md', 'markdown', 'mdx', 'rmd'])
 /** HTML extensions. */
 const HTML_EXT = new Set(['html', 'htm', 'xhtml'])
 /** Diff extensions. */
@@ -99,6 +99,7 @@ export function typeColor(contentType: PreviewContentType, name?: string): strin
   if (contentType === 'html') return '#fb923c'
   if (contentType === 'word' || contentType === 'excel' || contentType === 'ppt') return '#0ea5e9'
   if (ext === 'py') return '#3b82f6' // blue: python
+  if (ext === 'r' || ext === 'rmd') return '#276dc3' // R blue
   if (ext === 'js' || ext === 'jsx' || ext === 'mjs' || ext === 'cjs' || ext === 'ts' || ext === 'tsx') return '#eab308' // yellow
   if (ext === 'json' || ext === 'jsonc') return '#a855f7' // purple
   if (ext === 'rs') return '#d97706'
@@ -129,6 +130,27 @@ export function languageOf(name: string): string {
   const base = name.split('/').pop() ?? name
   const dot = base.lastIndexOf('.')
   return dot > 0 ? base.slice(dot + 1) : ''
+}
+
+/** The highlight.js language id for a file (undefined = no highlighting). */
+export function hljsLanguageOf(name: string): string | undefined {
+  const ext = languageOf(name).toLowerCase()
+  const map: Record<string, string> = {
+    py: 'python', js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript',
+    ts: 'typescript', tsx: 'typescript', json: 'json', jsonc: 'json',
+    css: 'css', scss: 'scss', less: 'less',
+    html: 'xml', htm: 'xml', xml: 'xml', svg: 'xml',
+    md: 'markdown', markdown: 'markdown', rmd: 'markdown',
+    sh: 'bash', bash: 'bash', zsh: 'bash', fish: 'bash',
+    r: 'r', sql: 'sql', go: 'go', rs: 'rust', java: 'java', c: 'c', h: 'c',
+    cpp: 'cpp', hpp: 'cpp', cc: 'cpp', cs: 'csharp', php: 'php', rb: 'ruby',
+    yml: 'yaml', yaml: 'yaml', toml: 'ini', ini: 'ini', env: 'ini', conf: 'ini',
+    kt: 'kotlin', swift: 'swift', dart: 'dart', lua: 'lua', ex: 'elixir', exs: 'elixir',
+    erl: 'erlang', hs: 'haskell', clj: 'clojure', scala: 'scala', ps1: 'powershell',
+    bat: 'dos', cmd: 'dos', pl: 'perl', pm: 'perl', jl: 'julia', groovy: 'groovy',
+    proto: 'protobuf', graphql: 'graphql', zig: 'zig', nix: 'nix', elm: 'elm',
+  }
+  return map[ext]
 }
 
 /** The title for a tab: the basename. */

@@ -485,49 +485,21 @@
   border-radius: 4px;
 }
 
-/* Code viewer: zebra-striped lines with a gutter (Trae-style alternation). */
+/* Code viewer (split preview side): syntax-highlighted pre. */
 .codeViewer {
   flex: 1;
   min-height: 0;
   overflow: auto;
   margin: 0;
+  padding: 12px 14px 16px;
   font-family: var(--aion-font-mono);
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 22px;
   color: var(--aion-text-primary);
   tab-size: 2;
-  padding: 8px 0 16px;
 }
 
-.codeLine {
-  display: flex;
-  min-height: 21px;
-  white-space: pre;
-}
-
-.codeLineAlt {
-  background: color-mix(in srgb, var(--aion-bg-3) 26%, transparent);
-}
-
-.codeLine:hover {
-  background: color-mix(in srgb, var(--aion-primary) 8%, transparent);
-}
-
-.codeGutter {
-  flex: 0 0 52px;
-  padding-right: 12px;
-  text-align: right;
-  color: var(--aion-text-tertiary);
-  user-select: none;
-  font-size: 12px;
-}
-
-.codeText {
-  flex: 1;
-  padding-right: 16px;
-}
-
-/* Read-write code editor shell (gutter + textarea share the line height). */
+/* Read-write code editor shell (gutter + highlight layer + transparent textarea). */
 .codeEditor {
   flex: 1;
   min-height: 0;
@@ -537,6 +509,14 @@
   font-size: 13px;
   line-height: 22px;
   --editor-line: 22px;
+}
+
+/* Relative container stacking the highlight layer under the textarea. */
+.codeEditorBody {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
 }
 
 /* The numbered gutter: same line-height as the textarea, zebra-striped. */
@@ -563,19 +543,28 @@
   background: color-mix(in srgb, var(--aion-bg-3) 20%, transparent);
 }
 
-/* The textarea: zebra stripes painted by a repeating gradient so typing keeps
-   the alternating tint; no wrap, no resize, monospace.
-   Alignment: `background-origin: content-box` starts the gradient at the
-   CONTENT area (inside padding), so stripe row 1 lands exactly on code line 1
-   and the gutter's odd rows — no more 12px padding offset. `background-attach-
-   ment: local` keeps the stripes glued to the text while scrolling. */
-.codeEditor .textEditor {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  border: none;
-  outline: none;
-  resize: none;
+/* The highlight layer: sits UNDER the textarea. It paints the zebra stripes
+   (so the alternating tint follows the code, not the viewport) and the
+   colored tokens. `background-origin: content-box` aligns stripe row 1 to
+   code line 1; `background-attachment: local` keeps stripes glued while the
+   textarea scrolls (scrollTop/Left are mirrored onto this pre). */
+.codeHighlight {
+  margin: 0;
+  white-space: pre;
+  font-family: var(--aion-font-mono);
+  font-size: 13px;
+  line-height: var(--editor-line);
+  tab-size: 2;
+  color: var(--aion-text-primary);
+  background-color: transparent;
+}
+
+.codeEditor .codeHighlight {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  padding: 12px 14px 16px;
+  pointer-events: none;
   background-image: repeating-linear-gradient(
     to bottom,
     transparent 0px,
@@ -585,6 +574,17 @@
   );
   background-origin: content-box;
   background-attachment: local;
+}
+
+/* The textarea: transparent text (the highlight layer shows through), native
+   caret and selection; typing updates the highlight layer above. */
+.codeEditor .textEditor {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  outline: none;
+  resize: none;
   background-color: transparent;
   color: var(--aion-text-primary);
   font-family: var(--aion-font-mono);
@@ -596,9 +596,57 @@
   overflow: auto;
 }
 
+.codeEditor .editorTransparent {
+  position: absolute;
+  inset: 0;
+  color: transparent;
+  caret-color: var(--aion-text-primary);
+  background: transparent;
+}
+
+.codeEditor .editorTransparent::selection {
+  background: color-mix(in srgb, var(--aion-primary) 35%, transparent);
+}
+
 .codeEditor .textEditor:focus-visible {
   box-shadow: inset 0 0 0 1px var(--aion-primary);
 }
+
+/* ── syntax highlight palette (dark theme, Trae-style) ───────────────────── */
+/* highlight.js emits GLOBAL classes (hljs-keyword etc.), so each must escape
+   CSS-module scoping with :global() or the hashed selector never matches. */
+.codeHighlight :global(.hljs-comment),
+.codeHighlight :global(.hljs-quote) { color: #7f9f7f; font-style: italic; }
+.codeHighlight :global(.hljs-keyword),
+.codeHighlight :global(.hljs-selector-tag),
+.codeHighlight :global(.hljs-literal),
+.codeHighlight :global(.hljs-section),
+.codeHighlight :global(.hljs-doctag) { color: #c678dd; }
+.codeHighlight :global(.hljs-string),
+.codeHighlight :global(.hljs-regexp),
+.codeHighlight :global(.hljs-addition) { color: #98c379; }
+.codeHighlight :global(.hljs-number),
+.codeHighlight :global(.hljs-symbol),
+.codeHighlight :global(.hljs-bullet),
+.codeHighlight :global(.hljs-variable),
+.codeHighlight :global(.hljs-template-variable),
+.codeHighlight :global(.hljs-link) { color: #d19a66; }
+.codeHighlight :global(.hljs-title),
+.codeHighlight :global(.hljs-title.function_),
+.codeHighlight :global(.hljs-title.class_),
+.codeHighlight :global(.hljs-name) { color: #61afef; }
+.codeHighlight :global(.hljs-attr),
+.codeHighlight :global(.hljs-attribute),
+.codeHighlight :global(.hljs-property),
+.codeHighlight :global(.hljs-params) { color: #e06c75; }
+.codeHighlight :global(.hljs-built_in),
+.codeHighlight :global(.hljs-type),
+.codeHighlight :global(.hljs-class .hljs-title) { color: #e5c07b; }
+.codeHighlight :global(.hljs-meta),
+.codeHighlight :global(.hljs-meta .hljs-keyword) { color: #56b6c2; }
+.codeHighlight :global(.hljs-deletion) { color: #e06c75; }
+.codeHighlight :global(.hljs-emphasis) { font-style: italic; }
+.codeHighlight :global(.hljs-strong) { font-weight: bold; }
 
 /* Diff viewer. */
 .diffViewer {
@@ -749,23 +797,53 @@
   border-color: var(--aion-primary);
 }
 
-/* Live editor under the diff rows. */
-.diffEditor {
-  margin: 10px 8px 14px;
-  border: 1px solid var(--aion-bg-3, #333);
-  border-radius: 8px;
-  overflow: hidden;
+/* EDIT MODE: the live editor COVERS the whole diff box (the diff view is
+   hidden behind it) — full-frame typing, zebra gutter from CodeEditor. */
+.diffEditorFull {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--aion-bg-0, #111);
 }
 
 .diffEditorHeader {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
   padding: 6px 10px;
   background: var(--aion-bg-1, #1a1a1a);
   border-bottom: 1px solid var(--aion-bg-3, #333);
   font-size: 12px;
   color: var(--aion-text-secondary);
+}
+
+.diffEditorTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diffEditorActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.diffEditBack {
+  padding: 2px 10px;
+  border: 1px solid var(--aion-bg-3, #333);
+  border-radius: 6px;
+  background: var(--aion-bg-2, #222);
+  color: var(--aion-text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.diffEditBack:hover {
+  border-color: var(--aion-primary);
 }
 
 .diffEditSave {
