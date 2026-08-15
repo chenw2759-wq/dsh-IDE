@@ -192,8 +192,13 @@ Installing dsh-easyssh automatically applies its bundled `cordis.patch.yml` (dec
 model's tools execute remotely; in local mode the facades delegate back to the same sandboxed local
 implementations). **No manual `<profile>/cordis.patch.yml` editing is required.**
 
-> Versions before 0.1.0 needed a hand-written seam patch; if your profile still carries one, you can
-> delete it — the automatic patch is identical (same row ids, idempotent).
+> ⚠️ **Upgrading users must read**: hand-writing the seam patch belongs to **versions before 0.1.0
+> only**. If you wrote the patch into `<profile>/cordis.patch.yml` (Windows default
+> `C:\Users\<you>\.dsh\profiles\web\cordis.patch.yml`) following the old docs, you MUST delete it
+> (restore the file to `[]`) after upgrading — otherwise the automatic patch and the hand-written one
+> each insert the same `ssh-workspace-fs` / `ssh-workspace-subprocess` rows and the loader fails with
+> a `duplicate loader entry id` error on startup. Delete it and restart; the automatic patch is
+> identical to the old hand-written one (same row ids).
 
 ### Step 4: restart
 
