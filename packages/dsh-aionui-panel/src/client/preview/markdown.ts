@@ -6,6 +6,8 @@
  * @module dsh-aionui-panel/client/preview/markdown
  */
 
+import { matchInlineHtml } from './inline-html.ts'
+
 /** Escape HTML special characters. */
 export function escapeHtml(text: string): string {
   return text
@@ -128,6 +130,18 @@ export function renderInline(text: string, options?: MarkdownRenderOptions): str
       out += escapeHtml(text[i + 1])
       i += 2
       continue
+    }
+    // Safe inline HTML (`<u>`, `<font color/face/size>`, `<span style>`): the
+    // visual editor persists color / font-size / font-family / underline /
+    // highlight this way because Markdown cannot express them. Sanitized by
+    // inline-html.ts (XSS boundary); content recurses so markdown inside works.
+    if (char === '<') {
+      const tag = matchInlineHtml(text, i, (inner) => renderInline(inner, options))
+      if (tag !== null) {
+        out += tag.html
+        i = tag.end
+        continue
+      }
     }
     // Fenced inline code first.
     if (char === '`') {

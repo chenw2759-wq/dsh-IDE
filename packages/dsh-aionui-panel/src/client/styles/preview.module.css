@@ -1341,6 +1341,21 @@ html[style*="color-scheme: light"] {
   cursor: pointer;
 }
 
+/* Labeled color pickers (字色 = text color, 底色 = highlight) so the two
+   swatches are no longer visually identical — the "change color paints the
+   background" confusion. */
+.officeColorWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.officeColorLabel {
+  font-size: 11px;
+  color: var(--aion-text-secondary, #454d5f);
+  user-select: none;
+}
+
 .officeToolbarSpacer {
   flex: 1 1 0;
 }

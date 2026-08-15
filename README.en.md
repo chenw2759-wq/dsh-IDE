@@ -148,10 +148,12 @@ Known limit: complex layouts (headers/footers, merged cells) are not preserved.
 The toolbar's "Visual editing" makes the rendered result itself the editable document (no more floating
 text boxes) — edit directly on the rendered page like Word. **Markdown** edits the compiled HTML and
 converts back to Markdown on save (titles with hyphens stay mojibake-free, code fences keep their
-language); **HTML** edits the FULL document in a design-mode iframe — the original `<style>` and canvas
-background render as-is, and saving serializes the whole document (no more single-column body-fragment
-overlay). The toolbar provides bold / italic / underline / color / highlight / font / size / align /
-undo / redo.
+language); **color / font-size / font-family / underline / highlight** persist as a strictly-sanitized
+inline-HTML subset, so changing the text color no longer paints the background and bold/italic/size
+survive saving. **HTML** edits the FULL document in a design-mode iframe (PPT-style rich editing: color
+/ size / bold-italic / align / underline / highlight) — the original `<style>` and canvas background
+render as-is, and saving serializes the whole document (no more single-column body-fragment overlay).
+The toolbar provides bold / italic / underline / color / highlight / font / size / align / undo / redo.
 
 ### 🚀 SSH Remote Development (Local Brain, Remote Hands)
 

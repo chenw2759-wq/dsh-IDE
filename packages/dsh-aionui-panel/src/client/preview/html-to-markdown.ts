@@ -6,11 +6,15 @@
  * survives — otherwise the file re-renders as escaped HTML ("乱码").
  *
  * Covers the subset the panel's own markdown renderer emits: h1-h6, p, strong,
- * em, del, code/pre, a, img, ul/ol/li, blockquote, hr, table. Styles markdown
- * cannot express (color / font-size / background) are dropped — a documented
- * limit.
+ * em, del, code/pre, a, img, ul/ol/li, blockquote, hr, table. Formatting that
+ * Markdown cannot express (color / font-size / font-family / underline /
+ * highlight) is persisted as a SMALL, sanitized subset of inline HTML
+ * (`<u>`, `<font>`, `<span style>`), validated by inline-html.ts so the
+ * renderer round-trips it exactly.
  * @module dsh-aionui-panel/client/preview/html-to-markdown
  */
+
+import { fontTagAttrs, spanTagAttrs } from './inline-html.ts'
 
 /** Escape text that will be interpreted as markdown syntax. */
 function mdInline(text: string): string {
@@ -19,8 +23,8 @@ function mdInline(text: string): string {
     .replace(/([\\`*{}\[\]()#+.!_>])/g, '\\$1')
 }
 
-/** Inline formatting for one text-ish element. */
-function inline(el: Element): string {
+/** Inline markdown for the CHILDREN of one element (text + nested inline). */
+function children(el: Element): string {
   let out = ''
   for (const child of Array.from(el.childNodes)) {
     if (child.nodeType === Node.TEXT_NODE) {
@@ -29,29 +33,46 @@ function inline(el: Element): string {
     }
     const node = child as Element
     const tag = node.tagName.toLowerCase()
-    const inner = inline(node)
-    if (tag === 'strong' || tag === 'b') out += `**${inner}**`
-    else if (tag === 'em' || tag === 'i') out += `*${inner}*`
-    else if (tag === 'del' || tag === 's') out += `~~${inner}~~`
-    else if (tag === 'code') out += `\`${inner}\``
-    else if (tag === 'a') {
-      const href = node.getAttribute('href') ?? ''
-      out += href === '' ? inner : `[${inner}](${href})`
-    } else if (tag === 'img') {
-      const src = node.getAttribute('src') ?? ''
-      const alt = node.getAttribute('alt') ?? ''
-      out += `![${mdInline(alt)}](${src})`
-    } else if (tag === 'br') {
+    if (tag === 'br') {
       out += '  \n'
-    } else {
-      out += inner
+      continue
     }
+    out += inline(node)
   }
   return out
 }
 
+/** Inline markdown for ONE element (its own tag plus its children). */
+function inline(el: Element): string {
+  const tag = el.tagName.toLowerCase()
+  if (tag === 'img') {
+    const src = el.getAttribute('src') ?? ''
+    const alt = el.getAttribute('alt') ?? ''
+    return `![${mdInline(alt)}](${src})`
+  }
+  const inner = children(el)
+  if (tag === 'strong' || tag === 'b') return `**${inner}**`
+  if (tag === 'em' || tag === 'i') return `*${inner}*`
+  if (tag === 'del' || tag === 's') return `~~${inner}~~`
+  if (tag === 'code') return `\`${inner}\``
+  if (tag === 'a') {
+    const href = el.getAttribute('href') ?? ''
+    return href === '' ? inner : `[${inner}](${href})`
+  }
+  if (tag === 'u') return `<u>${inner}</u>`
+  if (tag === 'font') {
+    const attrs = fontTagAttrs(el)
+    return attrs === '' ? inner : `<font${attrs}>${inner}</font>`
+  }
+  if (tag === 'span') {
+    const attrs = spanTagAttrs(el)
+    return attrs === '' ? inner : `<span${attrs}>${inner}</span>`
+  }
+  return inner
+}
+
 /** Convert one top-level block element to a markdown string. */
-function block(el: Element, listKind: 'ul' | 'ol' | null): string {
+function block(el: Element): string {
   const tag = el.tagName.toLowerCase()
   if (tag === 'h1') return `# ${inline(el).trim()}`
   if (tag === 'h2') return `## ${inline(el).trim()}`
@@ -76,8 +97,7 @@ function block(el: Element, listKind: 'ul' | 'ol' | null): string {
     const items = Array.from(el.children).filter((c) => c.tagName.toLowerCase() === 'li')
     return items.map((li, index) => {
       const prefix = tag === 'ol' ? `${index + 1}. ` : '- '
-      const text = inline(li).trim()
-      return `${prefix}${text}`
+      return `${prefix}${inline(li).trim()}`
     }).join('\n')
   }
   if (tag === 'table') {
@@ -89,7 +109,7 @@ function block(el: Element, listKind: 'ul' | 'ol' | null): string {
     const bodyRows = rows.slice(1).map((tr) => parseRow(tr).join(' | '))
     return [header.join(' | '), sep, ...bodyRows].join('\n')
   }
-  // p / li / anything else: plain paragraph (list items handled by parent)
+  // p / li / formatting element / anything else: plain paragraph content.
   return inline(el).trim()
 }
 
@@ -98,8 +118,7 @@ export function htmlToMarkdown(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html')
   const out: string[] = []
   for (const child of Array.from(doc.body.children)) {
-    const tag = child.tagName.toLowerCase()
-    const text = block(child, null)
+    const text = block(child)
     if (text === '') continue
     out.push(text)
   }

@@ -11,10 +11,17 @@
  *   body background stay intact), so the canvas background renders and saving
  *   serializes the whole document back — never a body-only fragment.
  *
+ * SELECTION KEEPING (the heart of the fix): toolbar `<select>` and
+ * `<input type=color>` steal focus the moment they open, which collapses the
+ * editable's selection — so `execCommand('foreColor' / 'fontSize' / …)` then
+ * applies to nothing (or the whole document), which is why color looked like
+ * it "painted the background" and size/bold/italic did not stick. Every tool
+ * therefore saves the selection on `onMouseDown` (before focus moves) and
+ * restores it before applying the command. Formatting also marks the document
+ * dirty so the save button enables immediately.
+ *
  * Editing is uncontrolled (the browser owns the DOM; React never re-injects
- * innerHTML), so the caret never jumps. The save callback receives the edited
- * result; the caller serializes it (HTML files keep HTML, Markdown files are
- * converted back to Markdown).
+ * innerHTML), so the caret never jumps.
  * @module dsh-aionui-panel/client/preview/visual-editor
  */
 
@@ -37,8 +44,18 @@ function isFullDocument(html: string): boolean {
   return /<!doctype\s+html/i.test(html) || /<html[\s>]/i.test(html) || /<head[\s>]/i.test(html) || /<body[\s>]/i.test(html)
 }
 
-/** The WYSIWYG editing toolbar (formatting applies to the selection). */
-function VisualToolbar({ exec, onSave, dirty }: { exec: (command: string, value?: string) => void; onSave: () => void; dirty: boolean }): JSX.Element {
+/**
+ * The WYSIWYG editing toolbar. `exec` applies a command to the (restored)
+ * selection and marks the document dirty; `saveSelection` snapshots the
+ * current selection and is called on mousedown of every focus-stealing
+ * control (select / color input), BEFORE focus moves away.
+ */
+function VisualToolbar({ exec, saveSelection, onSave, dirty }: {
+  exec: (command: string, value?: string) => void
+  saveSelection: () => void
+  onSave: () => void
+  dirty: boolean
+}): JSX.Element {
   const tools = readSettings().editorTools
   const [font, setFont] = useState('')
   const [size, setSize] = useState('')
@@ -48,13 +65,17 @@ function VisualToolbar({ exec, onSave, dirty }: { exec: (command: string, value?
       <button type="button" className={previewCss.officeToolBtn} title={t('preview.undo')} onMouseDown={(e) => { e.preventDefault(); exec('undo') }}>↶</button>
       <button type="button" className={previewCss.officeToolBtn} title={t('preview.redo')} onMouseDown={(e) => { e.preventDefault(); exec('redo') }}>↷</button>
       {tools.font && (
-        <select className={previewCss.officeTool} value={font} onChange={(e) => { setFont(e.target.value); exec('fontName', e.target.value) }} title={t('settings.tool.font')}>
+        <select className={previewCss.officeTool} value={font} title={t('settings.tool.font')}
+          onMouseDown={saveSelection}
+          onChange={(e) => { setFont(e.target.value); exec('fontName', e.target.value) }}>
           <option value="" disabled>{t('settings.tool.font')}</option>
           {FONTS.map((f) => <option key={f} value={f}>{f}</option>)}
         </select>
       )}
       {tools.fontSize && (
-        <select className={previewCss.officeTool} value={size} onChange={(e) => { setSize(e.target.value); exec('fontSize', String(Math.max(1, Math.round(Number(e.target.value) / 3)))) }} title={t('settings.tool.fontSize')}>
+        <select className={previewCss.officeTool} value={size} title={t('settings.tool.fontSize')}
+          onMouseDown={saveSelection}
+          onChange={(e) => { setSize(e.target.value); exec('fontSize', String(Math.max(1, Math.round(Number(e.target.value) / 3)))) }}>
           <option value="" disabled>{t('settings.tool.fontSize')}</option>
           {SIZES.map((s) => <option key={s} value={String(s)}>{s}px</option>)}
         </select>
@@ -75,8 +96,22 @@ function VisualToolbar({ exec, onSave, dirty }: { exec: (command: string, value?
           <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); exec('justifyRight') }}>右</button>
         </>
       )}
-      {tools.color && <input type="color" className={previewCss.officeColor} title={t('settings.tool.color')} defaultValue="#000000" onChange={(e) => exec('foreColor', e.target.value)} />}
-      {tools.highlight && <input type="color" className={previewCss.officeColor} title={t('settings.tool.highlight')} defaultValue="#fff176" onChange={(e) => exec('hiliteColor', e.target.value)} />}
+      {tools.color && (
+        <span className={previewCss.officeColorWrap} title={t('settings.tool.color')}>
+          <span className={previewCss.officeColorLabel}>字色</span>
+          <input type="color" className={previewCss.officeColor} defaultValue="#000000"
+            onMouseDown={saveSelection}
+            onChange={(e) => exec('foreColor', e.target.value)} />
+        </span>
+      )}
+      {tools.highlight && (
+        <span className={previewCss.officeColorWrap} title={t('settings.tool.highlight')}>
+          <span className={previewCss.officeColorLabel}>底色</span>
+          <input type="color" className={previewCss.officeColor} defaultValue="#fff176"
+            onMouseDown={saveSelection}
+            onChange={(e) => exec('hiliteColor', e.target.value)} />
+        </span>
+      )}
       <span className={previewCss.officeToolbarSpacer} />
       <button type="button" className={`${previewCss.officeToolBtn} ${previewCss.officeSave}`} disabled={!dirty} onClick={onSave}>{t('preview.save')}</button>
     </div>
@@ -96,6 +131,7 @@ export function VisualEditor({ html, contentType, onSave }: {
   }
 
   const ref = useRef<HTMLDivElement>(null)
+  const savedRange = useRef<Range | null>(null)
   const [dirty, setDirty] = useState(false)
   const [ready, setReady] = useState(false)
 
@@ -106,12 +142,31 @@ export function VisualEditor({ html, contentType, onSave }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [html])
 
+  const saveSelection = (): void => {
+    const sel = window.getSelection()
+    if (sel !== null && sel.rangeCount > 0) savedRange.current = sel.getRangeAt(0).cloneRange()
+  }
+
+  const restoreSelection = (): void => {
+    const el = ref.current
+    if (el === null) return
+    const sel = window.getSelection()
+    if (sel === null) return
+    if (savedRange.current !== null) {
+      sel.removeAllRanges()
+      sel.addRange(savedRange.current)
+    }
+    el.focus()
+  }
+
   const exec = (command: string, value?: string): void => {
+    restoreSelection()
     try {
       document.execCommand(command, false, value)
     } catch {
       // best-effort
     }
+    setDirty(true)
   }
 
   const save = (): void => {
@@ -123,7 +178,7 @@ export function VisualEditor({ html, contentType, onSave }: {
 
   return (
     <div className={previewCss.visualWrap}>
-      <VisualToolbar exec={exec} onSave={save} dirty={dirty} />
+      <VisualToolbar exec={exec} saveSelection={saveSelection} onSave={save} dirty={dirty} />
       <div
         ref={ref}
         className={`${previewCss.officeScroll} ${previewCss.visualEditable}`}
@@ -141,17 +196,20 @@ export function VisualEditor({ html, contentType, onSave }: {
  *  (background, <style>, layout all preserved), saved back as a full document. */
 function HtmlVisualEditor({ html, onSave }: { html: string; onSave: (editedHtml: string) => void }): JSX.Element {
   const frameRef = useRef<HTMLIFrameElement>(null)
+  const savedRange = useRef<Range | null>(null)
   const [dirty, setDirty] = useState(false)
   const [ready, setReady] = useState(false)
   const fullDoc = isFullDocument(html)
 
-  // Build the source document once. Full documents pass through verbatim (so
-  // their <style> and body background render); fragments get a minimal shell.
   const srcDoc = fullDoc
     ? html
     : `<!doctype html><html><head><meta charset="utf-8"><style>${FRAGMENT_BASE}</style></head><body>${html}</body></html>`
 
-  // Once the frame loads, turn on design mode and wire the dirty flag.
+  const withDoc = <T,>(fn: (doc: Document) => T): T | undefined => {
+    const doc = frameRef.current?.contentDocument
+    return doc === null || doc === undefined ? undefined : fn(doc)
+  }
+
   const handleLoad = (): void => {
     const doc = frameRef.current?.contentDocument
     if (doc === null || doc === undefined) return
@@ -161,12 +219,27 @@ function HtmlVisualEditor({ html, onSave }: { html: string; onSave: (editedHtml:
     setReady(true)
   }
 
-  const withDoc = <T,>(fn: (doc: Document) => T): T | undefined => {
-    const doc = frameRef.current?.contentDocument
-    return doc === null || doc === undefined ? undefined : fn(doc)
+  const saveSelection = (): void => {
+    withDoc((doc) => {
+      const sel = doc.getSelection()
+      if (sel !== null && sel.rangeCount > 0) savedRange.current = sel.getRangeAt(0).cloneRange()
+    })
+  }
+
+  const restoreSelection = (): void => {
+    withDoc((doc) => {
+      frameRef.current?.contentWindow?.focus()
+      const sel = doc.getSelection()
+      if (sel === null) return
+      if (savedRange.current !== null) {
+        sel.removeAllRanges()
+        sel.addRange(savedRange.current)
+      }
+    })
   }
 
   const exec = (command: string, value?: string): void => {
+    restoreSelection()
     withDoc((doc) => {
       try {
         doc.execCommand(command, false, value)
@@ -174,12 +247,11 @@ function HtmlVisualEditor({ html, onSave }: { html: string; onSave: (editedHtml:
         // best-effort
       }
     })
+    setDirty(true)
   }
 
   const save = (): void => {
     const out = withDoc((doc) => {
-      // Serialize the WHOLE document back (preserving <head>/<style>) when the
-      // source was a full document; otherwise write the edited body fragment.
       const body = doc.body.innerHTML
       return fullDoc ? `<!doctype html>\n${doc.documentElement.outerHTML}` : body
     })
@@ -190,7 +262,7 @@ function HtmlVisualEditor({ html, onSave }: { html: string; onSave: (editedHtml:
 
   return (
     <div className={previewCss.visualWrap}>
-      <VisualToolbar exec={exec} onSave={save} dirty={dirty} />
+      <VisualToolbar exec={exec} saveSelection={saveSelection} onSave={save} dirty={dirty} />
       <iframe
         ref={frameRef}
         className={previewCss.visualFrame}
