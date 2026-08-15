@@ -109,6 +109,68 @@ const MAX_PREVIEW_HEIGHT = 800
 const DEFAULT_PREVIEW_HEIGHT = 320
 const KEY_PREVIEW_HEIGHT = 'aionui-preview-height-px'
 
+/** Snap radius: the floating preview docks to the nearest preset zone whose
+ *  anchor is within this many px of the dragged pane's center. */
+const FLOAT_DOCK_SNAP_RADIUS = 120
+
+/** Float-dock geometry: frame-relative, top-left coordinates for the pane. */
+export interface FloatDockGeometry {
+  frameW: number
+  frameH: number
+  /** Sidebar (shell track 0) width. */
+  sidebarPx: number
+  /** The explorer column width (0 when folded). */
+  explorerPx: number
+  /** The floating pane's width. */
+  paneW: number
+  /** The floating pane's height. */
+  paneH: number
+}
+
+/** The pane's top-left position for one dock zone (desktop-icon snapping). */
+export function floatDockAnchor(zone: string, g: FloatDockGeometry): { x: number; y: number } | null {
+  const margin = 8
+  const maxX = Math.max(margin, Math.round(g.frameW - g.paneW - margin))
+  const maxY = Math.max(margin, Math.round(g.frameH - g.paneH - margin))
+  const right = Math.min(Math.max(margin, Math.round(g.frameW - g.paneW - margin)), maxX)
+  const bottom = Math.max(margin, Math.round(g.frameH - g.paneH - margin))
+  const centerY = Math.min(Math.max(margin, Math.round((g.frameH - g.paneH) / 2)), maxY)
+  switch (zone) {
+    // Far right: flush against the right edge, vertically centered.
+    case 'right':
+      return { x: right, y: centerY }
+    // Cover the file tree: sit over the explorer column (top-right); the tree
+    // auto-floats (collapses to the round button) when this dock is chosen.
+    case 'cover-tree':
+      return { x: Math.min(Math.max(margin, Math.round(g.frameW - g.paneW - margin)), maxX), y: Math.min(Math.max(margin, margin), maxY) }
+    // Below the tree: bottom-right, under the explorer column.
+    case 'below-tree':
+      return { x: right, y: bottom }
+    // Chat area below: bottom-left, over the chat column's lower edge.
+    case 'chat':
+      return { x: Math.min(Math.max(margin, g.sidebarPx + margin), maxX), y: bottom }
+    default:
+      return null
+  }
+}
+
+/** Pick the nearest dock zone to a pane center (null when none is close). */
+export function nearestFloatDock(cx: number, cy: number, g: FloatDockGeometry): { zone: string; x: number; y: number } | null {
+  let best: { zone: string; x: number; y: number; d: number } | null = null
+  for (const zone of ['right', 'cover-tree', 'below-tree', 'chat'] as const) {
+    const anchor = floatDockAnchor(zone, g)
+    if (anchor === null) continue
+    const ax = anchor.x + g.paneW / 2
+    const ay = anchor.y + g.paneH / 2
+    const d = Math.hypot(ax - cx, ay - cy)
+    if (d <= FLOAT_DOCK_SNAP_RADIUS && (best === null || d < best.d)) {
+      best = { zone, x: anchor.x, y: anchor.y, d }
+    }
+  }
+  return best === null ? null : { zone: best.zone, x: best.x, y: best.y }
+}
+
+
 /** The layout controller: frame sync, handles, floating button, width math. */
 export class PanelLayoutController {
   private frame: HTMLElement | null = null
@@ -120,6 +182,7 @@ export class PanelLayoutController {
   private widthHandle: HTMLDivElement | null = null
   private heightHandle: HTMLDivElement | null = null
   private floatingButton: HTMLButtonElement | null = null
+  private railButton: HTMLButtonElement | null = null
   private treePopup: HTMLDivElement | null = null
   private styleObserver: MutationObserver | null = null
   private sizeObserver: ResizeObserver | null = null
@@ -246,28 +309,33 @@ export class PanelLayoutController {
       })
     })
 
-    // The floating expand button (fixed, right edge) — DOM-level, no React.
-    // This is the TOPMOST control while the tree is folded: it opens the
-    // focus tree popup (a small movable frosted window over the preview).
+    // Two floating controls appear only while the tree is folded:
+    // 1) a ROUND button (the folded tree's avatar) — click toggles the focus
+    //    tree popup (open the floating file tree / close it again);
+    // 2) a small drawer handle at the far-right middle — click re-docks the
+    //    tree as the normal explorer drawer.
     this.floatingButton = document.createElement('button')
     this.floatingButton.type = 'button'
     this.floatingButton.className = 'aionui-floating-expand'
-    this.floatingButton.setAttribute('aria-label', 'Expand explorer')
-    this.floatingButton.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg>'
+    this.floatingButton.setAttribute('aria-label', 'Toggle file tree popup')
+    this.floatingButton.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 3h8M4 8h8M4 13h5"/></svg>'
     this.floatingButton.addEventListener('click', () => {
       const state = this.layout.getSnapshot()
-      if (state.treePopupOpen) {
-        this.layout.setTreePopupOpen(false)
-      } else if (state.previewOpen) {
-        // Preview is open: pull the tree out as a floating popup, never
-        // re-docking it (that would cover the preview).
-        this.layout.setTreePopupOpen(true)
-      } else {
-        // No preview: plain expand is the only sensible action.
-        this.toggleExplorer()
-      }
+      // Toggle the floating file tree popup (open ⇄ close).
+      this.layout.setTreePopupOpen(!state.treePopupOpen)
     })
     document.body.appendChild(this.floatingButton)
+
+    this.railButton = document.createElement('button')
+    this.railButton.type = 'button'
+    this.railButton.className = 'aionui-rail-drawer'
+    this.railButton.setAttribute('aria-label', 'Expand file tree drawer')
+    this.railButton.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg>'
+    this.railButton.addEventListener('click', () => {
+      this.toggleExplorer()
+      this.layout.setTreePopupOpen(false)
+    })
+    document.body.appendChild(this.railButton)
 
     // The focus tree popup: a small movable floating window rendered OVER the
     // preview (rounded corners, frosted glass). Header = drag strip + close;
@@ -443,12 +511,20 @@ export class PanelLayoutController {
     // Real interactive controls (mode toggle, collapse, tab close glyph, url
     // input…) are never drag origins — everything else on the strip is.
     if (target.closest('button, input, a, [data-aionui-close]')) return
-    const frameH = this.frame.clientHeight > 0 ? this.frame.clientHeight : this.frame.getBoundingClientRect().height
+    const frame = this.frame
+    const frameH = frame.clientHeight > 0 ? frame.clientHeight : frame.getBoundingClientRect().height
     const floatH = Math.max(240, Math.min(Math.round(frameH * 0.6), 720))
     const width = Math.round(state.previewWidth)
     const startX = event.clientX
     const startY = event.clientY
-    const pos = state.floatPos ?? { x: this.frame.getBoundingClientRect().width - Math.round(this.layout.explorerWidthPx(state)) - width - 12, y: Math.round((frameH - floatH) / 2) }
+    // Origin = the pane's CURRENT rendered top-left (dock anchor when snapped,
+    // free position otherwise, default slot as fallback).
+    const sidebarPx = this.shellTracks.length >= 1 ? trackPx(this.shellTracks[0]) : 0
+    const explorerPx = state.explorerCollapsed ? 0 : clampExplorerWidth(state.explorerWidth, state.availableWidth, true)
+    const dockOrigin = state.floatDock !== null
+      ? floatDockAnchor(state.floatDock, { frameW: this.frameWidth, frameH, sidebarPx, explorerPx, paneW: width, paneH: floatH })
+      : null
+    const pos = dockOrigin ?? state.floatPos ?? { x: frame.getBoundingClientRect().width - Math.round(this.layout.explorerWidthPx(state)) - width - 12, y: Math.round((frameH - floatH) / 2) }
     const startLeft = pos.x
     const startTop = pos.y
     const maxX = Math.max(8, Math.round(this.frameWidth - width - 8))
@@ -460,6 +536,8 @@ export class PanelLayoutController {
         // or button never arms, so its onClick still fires.
         if (Math.abs(moveEvent.clientX - startX) < DRAG_THRESHOLD_PX && Math.abs(moveEvent.clientY - startY) < DRAG_THRESHOLD_PX) return
         armed = true
+        // Detach from any dock zone: a live drag is always free-floating.
+        if (this.layout.getSnapshot().floatDock !== null) this.layout.setFloatDock(null)
         if (this.previewCol !== null) {
           this.previewCol.dataset.aionuiFloatDragging = ''
           this.previewCol.style.transition = 'none'
@@ -480,7 +558,35 @@ export class PanelLayoutController {
         delete this.previewCol.dataset.aionuiFloatDragging
         this.previewCol.style.transition = 'left 180ms cubic-bezier(0.4, 0, 0.2, 1), top 180ms cubic-bezier(0.4, 0, 0.2, 1), width 180ms cubic-bezier(0.4, 0, 0.2, 1), height 180ms cubic-bezier(0.4, 0, 0.2, 1)'
       }
-      if (armed) {
+      if (!armed) return
+      // Desktop-icon snapping: on release, dock to the nearest preset zone
+      // when its anchor is within the snap radius; otherwise free-float.
+      const snapshot = this.layout.getSnapshot()
+      const frameW = this.frameWidth > 0 ? this.frameWidth : frame.getBoundingClientRect().width
+      const frameH2 = frame.clientHeight > 0 ? frame.clientHeight : frame.getBoundingClientRect().height
+      const floatH2 = Math.max(240, Math.min(Math.round(frameH2 * 0.6), 720))
+      const paneW = Math.round(snapshot.previewWidth)
+      const sidebarPx2 = this.shellTracks.length >= 1 ? trackPx(this.shellTracks[0]) : 0
+      const explorerPx2 = snapshot.explorerCollapsed ? 0 : clampExplorerWidth(snapshot.explorerWidth, snapshot.availableWidth, true)
+      const pos = snapshot.floatPos
+      const cx = pos !== null ? pos.x + paneW / 2 : frameW / 2
+      const cy = pos !== null ? pos.y + floatH2 / 2 : frameH2 / 2
+      const snap = nearestFloatDock(cx, cy, { frameW, frameH: frameH2, sidebarPx: sidebarPx2, explorerPx: explorerPx2, paneW, paneH: floatH2 })
+      if (snap !== null) {
+        this.layout.setFloatPos({ x: snap.x, y: snap.y })
+        this.layout.setFloatDock(snap.zone as 'right' | 'cover-tree' | 'below-tree' | 'chat')
+        // "Cover the file tree" folds the tree into its round button.
+        if (snap.zone === 'cover-tree' && !snapshot.explorerCollapsed) {
+          this.layout.update((prev) => ({ ...prev, explorerCollapsed: true }))
+          try {
+            localStorage.setItem(`project-panel-collapse:${snapshot.root}`, 'collapsed')
+          } catch {
+            // best-effort
+          }
+        }
+      } else {
+        // Dragged out of a dock: free float at the current position.
+        this.layout.setFloatDock(null)
         try {
           localStorage.setItem(KEY_FLOAT_POS, JSON.stringify(this.layout.getSnapshot().floatPos))
         } catch {
@@ -580,7 +686,6 @@ export class PanelLayoutController {
     // the shell's own 3-track grid.
     if (this.shellTracks.length !== 3) return
     const state = this.layout.getSnapshot()
-    const panel = this.layout.explorerWidthPx(state)
     const previewOpen = state.previewOpen
     const mode = state.previewMode
     const side = mode === 'side'
@@ -588,21 +693,33 @@ export class PanelLayoutController {
     const triple = mode === 'triple'
     const frameH = frame.clientHeight > 0 ? frame.clientHeight : frame.getBoundingClientRect().height
 
-    // P1.2: in SIDE mode the preview is its OWN grid track beside the tree —
-    // the panel column width becomes explorer + preview, so growing the
-    // preview compresses the chat (the 1fr center track), never overlaying it.
-    // Range: 0..½ of the available row (clamped; chat floor respected).
+    // The explorer's OWN width (0 when folded). The PREVIEW is never folded —
+    // its track keeps its width even while the tree is collapsed.
+    const explorerPx = state.explorerCollapsed ? 0 : clampExplorerWidth(state.explorerWidth, state.availableWidth, state.previewOpen)
+
+    // Preview width per mode (the preview never shrinks just because the tree
+    // folded):
+    // - side: its own track beside the tree (0..½ row, chat floor respected)
+    // - bottom: the preview fills the panel column width (= explorer width)
+    // - float: a bounded floating pane width
+    // - triple: the panel column is explorer + preview
     const sidePreviewPx = side && previewOpen ? this.layout.previewWidthPx(state) : 0
+    const bottomPreviewPx = (!side && !floating && !triple && previewOpen)
+      ? clampExplorerWidth(state.explorerWidth, state.availableWidth, true)
+      : 0
 
-    // True fold (P1.3): a collapsed tree is width 0 — nothing left behind.
-    const explorerTrackPx = state.explorerCollapsed ? 0 : Math.round(panel)
-
-    // Triple IDE layout: the panel column becomes TWO side-by-side columns —
-    // the file tree (explorerWidth) and the preview (previewWidth) — so the
-    // frame reads 对话 | 文件树 | 预览.
+    // The panel column's total width:
+    // - triple: explorer + preview (when open)
+    // - side: explorer + preview track
+    // - bottom: explorer when unfolded, PREVIEW width when folded (preview stays)
+    // - float: explorer only (preview floats outside the grid)
     const tripleWidth = triple && previewOpen
       ? Math.min(state.availableWidth > 0 ? state.availableWidth : 1200, Math.round(state.explorerWidth + state.previewWidth))
-      : Math.round(explorerTrackPx + sidePreviewPx)
+      : floating
+        ? explorerPx
+        : side
+          ? Math.round(explorerPx + sidePreviewPx)
+          : Math.round(explorerPx + bottomPreviewPx)
 
     // Four tracks: shell sidebar, center, shell details, the panel column.
     frame.style.gridTemplateColumns =
@@ -619,13 +736,16 @@ export class PanelLayoutController {
       if (triple || side) {
         // Triple: file tree is its own fixed-width column beside the preview.
         // Side (P1.2): the tree keeps its stored width; the preview track
-        // grows/shrinks next to it, compressing the chat. A collapsed tree
-        // shows as the P1.3 focus rail.
+        // grows/shrinks next to it, compressing the chat. A folded tree is
+        // width 0 — the preview keeps its own track.
         this.explorerCol.style.flex = '0 0 auto'
-        this.explorerCol.style.width = `${explorerTrackPx}px`
+        this.explorerCol.style.width = `${explorerPx}px`
         this.explorerCol.style.borderRight = '1px solid var(--aion-bg-3, #e5e6eb)'
       } else {
-        this.explorerCol.style.flex = '1 1 0'
+        // Bottom / float: the explorer fills the panel column. Folded = the
+        // explorer is hidden (flex-basis 0) while the preview keeps the
+        // column width below it.
+        this.explorerCol.style.flex = state.explorerCollapsed ? '0 0 0' : '1 1 0'
         this.explorerCol.style.width = ''
         this.explorerCol.style.borderRight = ''
       }
@@ -655,10 +775,23 @@ export class PanelLayoutController {
         // height so dragging it around stays inside the frame.
         const frameH = frame.clientHeight > 0 ? frame.clientHeight : frame.getBoundingClientRect().height
         const floatH = Math.max(240, Math.min(Math.round(frameH * 0.6), 720))
-        const panelPx = Math.round(panel)
+        const panelPx = Math.round(explorerPx)
+        const sidebarPx = this.shellTracks.length >= 1 ? trackPx(this.shellTracks[0]) : 0
         const defaultX = Math.max(8, Math.round(this.frameWidth - panelPx - width - 12))
         const defaultY = Math.max(8, Math.round((frameH - floatH) / 2))
-        const pos = state.floatPos ?? { x: defaultX, y: defaultY }
+        // A dock zone overrides the free position (desktop-icon snapping): the
+        // pane stays glued to its preset even as the frame resizes.
+        const dockAnchor = state.floatDock !== null
+          ? floatDockAnchor(state.floatDock, {
+              frameW: this.frameWidth,
+              frameH,
+              sidebarPx,
+              explorerPx: panelPx,
+              paneW: width,
+              paneH: floatH,
+            })
+          : null
+        const pos = dockAnchor ?? state.floatPos ?? { x: defaultX, y: defaultY }
         const maxX = Math.max(8, Math.round(this.frameWidth - width - 8))
         const maxY = Math.max(8, frameH - floatH - 8)
         const x = Math.min(Math.max(8, Math.round(pos.x)), maxX)
@@ -745,12 +878,16 @@ export class PanelLayoutController {
       this.widthHandle.style.display = tripleWidth > 0 && state.root !== '' ? 'block' : 'none'
     }
 
-    // Floating expand button: the TOPMOST control while the tree is folded.
-    // With a preview open it pulls the tree out as the focus popup; without a
-    // preview it plain-expands the tree. Always visible while collapsed.
+    // Two folded-tree controls (visible only while the tree is collapsed):
+    // - the ROUND button (tree avatar) toggles the floating file-tree popup;
+    // - the far-right drawer handle re-docks the tree as the normal drawer.
     if (this.floatingButton !== null) {
       const show = state.root !== '' && state.explorerCollapsed
       this.floatingButton.style.display = show ? 'flex' : 'none'
+    }
+    if (this.railButton !== null) {
+      const show = state.root !== '' && state.explorerCollapsed
+      this.railButton.style.display = show ? 'flex' : 'none'
     }
 
     // Focus tree popup: a small movable frosted window over the preview.
@@ -761,9 +898,15 @@ export class PanelLayoutController {
         const popupW = 320
         const popupH = Math.min(480, Math.max(280, Math.round(frameH * 0.6)))
         const saved = readTreePopupPos()
-        const defaultX = Math.max(8, Math.round(frameW - tripleWidth - popupW - 16))
+        // The popup must never cover the round toggle button (fixed at
+        // right:14px, 44px wide → its left edge is frameW - 58). Keep the
+        // popup's right edge at least 12px clear of that button so a click on
+        // the button always lands on the button, closing the popup again.
+        const buttonClearX = Math.max(8, frameW - popupW - 70)
+        const defaultX = Math.min(Math.max(8, Math.round(frameW - tripleWidth - popupW - 16)), buttonClearX)
         const defaultY = Math.max(8, Math.round(frameH * 0.12))
-        const px = saved !== null ? Math.min(Math.max(8, saved.x), Math.max(8, window.innerWidth - popupW - 8)) : defaultX
+        const maxX = Math.max(8, Math.min(window.innerWidth - popupW - 8, buttonClearX))
+        const px = saved !== null ? Math.min(Math.max(8, saved.x), maxX) : defaultX
         const py = saved !== null ? Math.min(Math.max(8, saved.y), Math.max(8, window.innerHeight - popupH - 8)) : defaultY
         this.treePopup.style.display = 'flex'
         this.treePopup.style.left = `${px}px`
@@ -808,6 +951,7 @@ export class PanelLayoutController {
     this.panelCol?.remove()
     this.widthHandle?.remove()
     this.floatingButton?.remove()
+    this.railButton?.remove()
     this.treePopup?.remove()
     if (this.instantTimer !== undefined) clearTimeout(this.instantTimer)
     if (frameElement === this.frame) frameElement = null

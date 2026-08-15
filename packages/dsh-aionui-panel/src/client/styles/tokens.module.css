@@ -245,25 +245,25 @@
   opacity: 1;
 }
 
-/* Floating expand button (explorer collapsed). */
+/* The folded tree's ROUND avatar button (fixed, right edge). Click toggles
+   the floating file-tree popup. */
 :global(.aionui-floating-expand) {
   position: fixed;
   top: 50%;
-  right: 0;
+  right: 14px;
   transform: translateY(-50%);
-  width: 20px;
-  height: 64px;
+  width: 44px;
+  height: 44px;
   display: none;
   align-items: center;
   justify-content: center;
-  border: none;
-  border-top-left-radius: 10px;
-  border-bottom-left-radius: 10px;
+  border: 1px solid var(--aion-bg-3);
+  border-radius: 50%;
   background-color: var(--aion-bg-2);
   color: var(--aion-text-secondary);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
   cursor: pointer;
-  z-index: 100;
+  z-index: 600;
   transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 :global(.aionui-floating-expand:hover) {
@@ -274,6 +274,41 @@
   background-color: var(--aion-bg-active);
 }
 :global(.aionui-floating-expand:focus-visible) {
+  outline: 2px solid var(--aion-primary);
+  outline-offset: 2px;
+}
+
+/* The drawer handle at the far-right MIDDLE (below the round button): re-docks
+   the file tree as the normal explorer drawer. */
+:global(.aionui-rail-drawer) {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  margin-top: 54px;
+  width: 16px;
+  height: 48px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+  background-color: var(--aion-bg-2);
+  color: var(--aion-text-secondary);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  z-index: 600;
+  transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+:global(.aionui-rail-drawer:hover) {
+  background-color: var(--aion-bg-3);
+  color: var(--aion-text-primary);
+}
+:global(.aionui-rail-drawer:active) {
+  background-color: var(--aion-bg-active);
+}
+:global(.aionui-rail-drawer:focus-visible) {
   outline: 2px solid var(--aion-primary);
   outline-offset: 2px;
 }

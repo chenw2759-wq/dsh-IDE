@@ -195,10 +195,20 @@ export interface LayoutState {
    *  topmost expand button opens this small movable floating file-tree window
    *  (rounded, frosted) instead of re-docking the tree column. */
   treePopupOpen: boolean
+  /** Float-dock zone the floating preview is snapped to (desktop-icon style:
+   *  far-right / cover-tree / below-tree / chat-below); null = free float. */
+  floatDock: FloatDockZone | null
 }
 
 /** Storage key of the floating-pane position (global, JSON {x,y} or null). */
 export const KEY_FLOAT_POS = 'aionui-float-pos'
+
+/** Storage key of the floating-pane dock zone (global, '' = free float). */
+export const KEY_FLOAT_DOCK = 'aionui-float-dock'
+
+/** Floating preview dock zones (desktop-icon style snapping). */
+export const FLOAT_DOCKS = ['right', 'cover-tree', 'below-tree', 'chat'] as const
+export type FloatDockZone = (typeof FLOAT_DOCKS)[number]
 
 /** Storage key of the tree-popup position (global, JSON {x,y}). */
 export const KEY_TREE_POPUP_POS = 'aionui-tree-popup-pos'
@@ -217,6 +227,8 @@ export interface LayoutStore extends StateHandle<LayoutState> {
   setPreviewMode: (mode: 'bottom' | 'side' | 'float' | 'triple') => void
   /** Move the floating pane (float mode); null restores the default slot. */
   setFloatPos: (pos: { x: number; y: number } | null) => void
+  /** Snap the floating pane to a dock zone; null = free float. */
+  setFloatDock: (dock: FloatDockZone | null) => void
   /** Open / close the integrated terminal. */
   setTerminalOpen: (open: boolean) => void
   /** Open / close the focus tree popup. */
@@ -249,6 +261,7 @@ export function createLayoutStore(
     dragging: false,
     terminalOpen: false,
     treePopupOpen: false,
+    floatDock: readFloatDock(),
   })
   const store: LayoutStore = Object.assign(handle, {
     explorerWidthPx(state: LayoutState): number {
@@ -300,6 +313,14 @@ export function createLayoutStore(
         // best-effort
       }
     },
+    setFloatDock(dock: FloatDockZone | null): void {
+      handle.update((prev) => (prev.floatDock === dock ? prev : { ...prev, floatDock: dock }))
+      try {
+        localStorage.setItem(KEY_FLOAT_DOCK, dock ?? '')
+      } catch {
+        // best-effort
+      }
+    },
     setTerminalOpen(open: boolean): void {
       handle.update((prev) => (prev.terminalOpen === open ? prev : { ...prev, terminalOpen: open }))
     },
@@ -318,6 +339,16 @@ function readFloatPos(): { x: number; y: number } | null {
     const parsed = JSON.parse(raw) as { x?: number; y?: number }
     if (typeof parsed.x === 'number' && typeof parsed.y === 'number') return { x: parsed.x, y: parsed.y }
     return null
+  } catch {
+    return null
+  }
+}
+
+/** Read the persisted float-dock zone ('' / absent / invalid = free float). */
+function readFloatDock(): FloatDockZone | null {
+  try {
+    const raw = localStorage.getItem(KEY_FLOAT_DOCK)
+    return raw !== null && (FLOAT_DOCKS as readonly string[]).includes(raw) ? raw as FloatDockZone : null
   } catch {
     return null
   }

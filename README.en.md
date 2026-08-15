@@ -121,8 +121,8 @@ Log files (gray tab) preview directly in the panel.
 
 - Preview tabs can be **dragged to reorder**
 - Four layout modes cycle: bottom (⇊) / right drawer (⇉) / float (⇱) / **triple IDE (⿻)** — chat | files | preview side by side
-- **Free drag**: in the drawer layout, drag the preview column's width handle (0..½ of the row — the chat compresses, never overlays); in the float layout, grab the preview tab bar to move the floating pane anywhere (position remembered, 180ms glide animation)
-- **Focus rail**: with the preview open, collapse the file tree — it shrinks to a ~30px right rail with a small rounded expand tab; click it to expand back
+- **Free drag**: in the drawer layout, drag the preview column's width handle (0..½ of the row — the chat compresses, never overlays); in the float layout, grab the preview tab bar to move the floating pane anywhere (position remembered, 180ms glide animation), snapping on release to preset positions — **far-right / cover the file tree (tree auto-collapses to a round button) / below the tree / chat-below** (drag out of a zone to free-float again)
+- **Focus rail**: with the preview open, collapse the file tree — it shrinks to a round floating button + a far-right drawer handle; the preview keeps its width (never collapses with the tree). Click the round button to toggle the floating file-tree popup; click the far-right handle to re-dock the drawer
 
 ### 🧬 R Language Support
 
@@ -143,11 +143,15 @@ Settings (font / size / bold-italic / align / underline / color / highlight / sp
 rebuilds the docx/xlsx/pptx from the edited HTML and writes it back as binary (mtime-conflict guarded).
 Known limit: complex layouts (headers/footers, merged cells) are not preserved.
 
-### 🎨 HTML / Markdown Visual Editing (PowerPoint-style)
+### 🎨 HTML / Markdown Visual Editing (Word-style in-place)
 
-The toolbar's "Visual editing" opens a canvas where every content block is a **text box** — drag to
-move, drag the corner to resize, edit text inline, **add / delete boxes**, change **text color /
-background / font size / bold**; saving writes back an inline-styled HTML document.
+The toolbar's "Visual editing" makes the rendered result itself the editable document (no more floating
+text boxes) — edit directly on the rendered page like Word. **Markdown** edits the compiled HTML and
+converts back to Markdown on save (titles with hyphens stay mojibake-free, code fences keep their
+language); **HTML** edits the FULL document in a design-mode iframe — the original `<style>` and canvas
+background render as-is, and saving serializes the whole document (no more single-column body-fragment
+overlay). The toolbar provides bold / italic / underline / color / highlight / font / size / align /
+undo / redo.
 
 ### 🚀 SSH Remote Development (Local Brain, Remote Hands)
 

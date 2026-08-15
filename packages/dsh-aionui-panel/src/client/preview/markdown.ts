@@ -120,6 +120,15 @@ export function renderInline(text: string, options?: MarkdownRenderOptions): str
   const n = text.length
   while (i < n) {
     const char = text[i]
+    // Backslash escape: `\X` renders the literal X (the visual editor's
+    // htmlToMarkdown escapes markdown-significant characters this way, so the
+    // round-trip must unescape them — otherwise a title like "任务-计划书"
+    // re-renders as "任务\-计划书" with a stray backslash).
+    if (char === '\\' && i + 1 < n && /[\\`*{}\[\]()#+\-.!_>]/.test(text[i + 1])) {
+      out += escapeHtml(text[i + 1])
+      i += 2
+      continue
+    }
     // Fenced inline code first.
     if (char === '`') {
       const end = text.indexOf('`', i + 1)

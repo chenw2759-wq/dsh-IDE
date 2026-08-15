@@ -1371,13 +1371,33 @@ html[style*="color-scheme: light"] {
   background: color-mix(in srgb, var(--aion-primary, #165dff) 12%, transparent);
 }
 
-/* ── Visual editor (P4.2): PowerPoint-style text boxes ───────────────────── */
+/* ── Visual editor (P4.2): WYSIWYG in-place editing ─────────────────────── */
 
 .visualWrap {
   flex: 1 1 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* The editable rendered page: looks exactly like the preview, typed in place. */
+.visualEditable {
+  outline: none;
+  min-height: 100%;
+}
+
+.visualEditable:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--aion-primary);
+}
+
+/* The HTML design-mode iframe (full document, background preserved). */
+.visualFrame {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  border: none;
+  background: #fff;
+  display: block;
 }
 
 .visualToolbar {
