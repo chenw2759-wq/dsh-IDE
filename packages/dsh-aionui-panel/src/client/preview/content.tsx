@@ -606,6 +606,25 @@ function Zoomable({ children }: { children: React.ReactNode }): JSX.Element {
   const scaleRef = useRef(1)
   const bodyRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
+  // The scrollable body's CONTENT size in px (minus scrollbars) — the slot
+  // the transformed layer must fill visually. Percentages do NOT work here:
+  // inside a flex container the iframe's min-content width pins the wrapper
+  // (the 100%/scale width silently lost), which breaks zoom-out.
+  const [slot, setSlot] = useState<{ w: number; h: number }>({ w: 0, h: 0 })
+
+  useEffect(() => {
+    const body = bodyRef.current
+    if (body === null) return
+    const update = (): void => {
+      const w = body.clientWidth
+      const h = body.clientHeight
+      setSlot((prev) => (prev.w === w && prev.h === h ? prev : { w, h }))
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(body)
+    return () => observer.disconnect()
+  }, [])
 
   const applyScale = (next: number): void => {
     const clamped = Math.round(Math.min(4, Math.max(0.25, next)) * 100) / 100
@@ -653,17 +672,24 @@ function Zoomable({ children }: { children: React.ReactNode }): JSX.Element {
           zoomBy(event.deltaY < 0 ? 0.1 : -0.1)
         }}
       >
-        {/* Shrink the logical slot to 100%/scale so the transform renders at
-            full visual size: iframes keep their NATIVE scrollbars (a plain
-            scale() would blow the scrollbar up with the content), while
-            images scale pixel-perfect. */}
+        {/* The logical slot is bodySize / scale (px) so the transform renders
+            at exactly the visible area: iframes keep their NATIVE scrollbars
+            (a plain scale() would blow the scrollbar up with the content),
+            and images scale pixel-perfect. min-width/min-height 0 lets the
+            flex item shrink below its content width. */}
         <div
           ref={contentRef}
           style={{
             transform: `scale(${scale})`,
             transformOrigin: 'top left',
-            width: `${100 / scale}%`,
-            height: `${100 / scale}%`,
+            width: slot.w > 0 ? slot.w / scale : '100%',
+            height: slot.h > 0 ? slot.h / scale : '100%',
+            // The zoom body is a flex row: without flex:0 0 auto the item's
+            // flex-shrink would crush the explicitly sized slot back down to
+            // the content width (the zoom-out "whole frame shrinks" bug).
+            flex: '0 0 auto',
+            minWidth: 0,
+            minHeight: 0,
           }}
         >
           {children}
