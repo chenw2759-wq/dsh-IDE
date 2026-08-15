@@ -267,6 +267,8 @@ export function layoutSetRoot(store: LayoutStore, root: string, previewOpen: boo
 /** Explorer panel state. */
 export interface ExplorerState {
   root: string
+  /** The session this explorer view belongs to (per-session memory). */
+  session: string
   /** rel path -> listing cache ('' = root). */
   dirs: Record<string, FsEntry[]>
   /** Expanded dir rel paths (order = display order). */
@@ -292,7 +294,7 @@ export interface ExplorerState {
 
 /** The explorer store with its async actions. */
 export interface ExplorerStore extends StateHandle<ExplorerState> {
-  setRoot: (root: string) => void
+  setRoot: (root: string, session?: string) => void
   setActiveTab: (tab: 'files' | 'changes') => void
   toggleDir: (rel: string) => void
   select: (rel: string | null) => void
@@ -305,9 +307,11 @@ export interface ExplorerStore extends StateHandle<ExplorerState> {
   refreshGitStatus: () => Promise<void>
 }
 
-/** Read the persisted explorer UI state for a root (range-guarded). */
-export function readExplorerUi(root: string): { expanded: string[]; selected: string | null } {
-  const stored = readJson<{ expanded?: unknown; selected?: unknown }>(`${KEY_EXPLORER_UI}${root}`, {})
+/** Read the persisted explorer UI state for a session+root (range-guarded).
+ *  Isolation is per SESSION so each conversation remembers its own expanded
+ *  folders; a session without any memory just sees the workspace. */
+export function readExplorerUi(session: string, root: string): { expanded: string[]; selected: string | null } {
+  const stored = readJson<{ expanded?: unknown; selected?: unknown }>(`${KEY_EXPLORER_UI}${session}:${root}`, {})
   const expanded = Array.isArray(stored.expanded)
     ? stored.expanded.filter((item): item is string => typeof item === 'string')
     : []
@@ -347,6 +351,7 @@ function isNoisePath(rel: string): boolean {
 export function createExplorerStore(api: PanelApi): ExplorerStore {
   const handle = createState<ExplorerState>({
     root: '',
+    session: '',
     dirs: {},
     expanded: [],
     selected: null,
@@ -361,17 +366,21 @@ export function createExplorerStore(api: PanelApi): ExplorerStore {
   let searchTimer: ReturnType<typeof setTimeout> | undefined
   let fsVersion = 0
   let persistRoot = ''
+  let persistSession = ''
   let persistExpanded: string[] = []
   let persistSelected: string | null = null
   const flushPersist = (): void => {
     if (persistTimer !== undefined) clearTimeout(persistTimer)
     persistTimer = undefined
-    if (persistRoot !== '') writeJson(`${KEY_EXPLORER_UI}${persistRoot}`, { expanded: persistExpanded, selected: persistSelected })
+    if (persistRoot !== '') {
+      writeJson(`${KEY_EXPLORER_UI}${persistSession}:${persistRoot}`, { expanded: persistExpanded, selected: persistSelected })
+    }
   }
-  const schedulePersist = (root: string, expanded: string[], selected: string | null): void => {
+  const schedulePersist = (root: string, session: string, expanded: string[], selected: string | null): void => {
     if (root === '') return
     if (persistTimer !== undefined) clearTimeout(persistTimer)
     persistRoot = root
+    persistSession = session
     persistExpanded = expanded
     persistSelected = selected
     persistTimer = setTimeout(flushPersist, 150)
@@ -421,13 +430,14 @@ export function createExplorerStore(api: PanelApi): ExplorerStore {
   }
 
   const store: ExplorerStore = Object.assign(handle, {
-    setRoot(root: string) {
+    setRoot(root: string, session = '') {
       handle.update((prev) => {
-        if (prev.root === root) return prev
-        const ui = readExplorerUi(root)
+        if (prev.root === root && prev.session === session) return prev
+        const ui = readExplorerUi(session, root)
         return {
           ...prev,
           root,
+          session,
           dirs: {},
           expanded: ui.expanded,
           selected: ui.selected,
@@ -478,12 +488,12 @@ export function createExplorerStore(api: PanelApi): ExplorerStore {
         handle.update((prev) => ({ ...prev, expanded: [...prev.expanded, rel] }))
         void ensureDir(state.root, rel)
       }
-      schedulePersist(state.root, isExpanded ? state.expanded.filter((item) => item !== rel) : [...state.expanded, rel], state.selected)
+      schedulePersist(state.root, state.session, isExpanded ? state.expanded.filter((item) => item !== rel) : [...state.expanded, rel], state.selected)
     },
     select(rel: string | null) {
       handle.update((prev) => (prev.selected === rel ? prev : { ...prev, selected: rel }))
       const state = handle.getSnapshot()
-      schedulePersist(state.root, state.expanded, rel)
+      schedulePersist(state.root, state.session, state.expanded, rel)
     },
     reveal(rel: string) {
       const state = handle.getSnapshot()
@@ -497,7 +507,7 @@ export function createExplorerStore(api: PanelApi): ExplorerStore {
         return { ...prev, expanded, selected: rel, search: { ...EMPTY_SEARCH } }
       })
       for (const item of missing) void ensureDir(state.root, item)
-      schedulePersist(state.root, [...state.expanded, ...missing], rel)
+      schedulePersist(state.root, state.session, [...state.expanded, ...missing], rel)
     },
     setSearchQuery(query: string) {
       const trimmed = query.trim()

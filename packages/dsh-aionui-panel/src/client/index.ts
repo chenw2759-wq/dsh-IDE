@@ -50,34 +50,41 @@ export function apply(ctx: ClientContext): void {
     const disposers: Array<() => void> = []
     let disposeEvents: (() => void) | undefined
     let currentRoot = ''
+    let currentSession = ''
     let lastPreviewOpen = false
 
     // The project root follows the active session's cwd — or the SSH remote
     // root when the workspace plugin's mode is remote. Switching sessions or
     // entering/leaving SSH mode re-binds every store (widths, collapse, tree,
-    // tabs persist per root).
-    const resolveRoot = (): string => {
+    // tabs persist per root). The session id is resolved too: the file tree
+    // keeps PER-SESSION memory (each conversation remembers its own expanded
+    // folders; a session without memory just shows the workspace).
+    const resolveSession = (): { root: string; sessionId: string } => {
       const mode = (ctx.get('sshWorkspaceMode') as SshWorkspaceModeLike | undefined)?.getSnapshot()
       if (mode?.mode === 'remote' && typeof mode.remoteRoot === 'string' && mode.remoteRoot !== '') {
-        return mode.remoteRoot
+        return { root: mode.remoteRoot, sessionId: String(mode.alias ?? '') }
       }
       const snapshot = ctx.sessions.list.getSnapshot()
       const sessionId = snapshot.current as SessionId | undefined
       const cwd = sessionId === undefined ? undefined : snapshot.byId[sessionId]?.cwd
-      return typeof cwd === 'string' && cwd !== '' ? cwd : ''
+      return {
+        root: typeof cwd === 'string' && cwd !== '' ? cwd : '',
+        sessionId: typeof sessionId === 'string' ? sessionId : '',
+      }
     }
 
     const bindRoot = (): void => {
-      const root = resolveRoot()
-      if (root === currentRoot) return
+      const { root, sessionId } = resolveSession()
+      if (root === currentRoot && sessionId === currentSession) return
       currentRoot = root
+      currentSession = sessionId
 
       disposeEvents?.()
       disposeEvents = undefined
       const previewOpen = stores.preview.getSnapshot().open
       lastPreviewOpen = previewOpen
       layoutSetRoot(stores.layout, root, previewOpen)
-      stores.explorer.setRoot(root)
+      stores.explorer.setRoot(root, sessionId)
       stores.scm.setRoot(root)
       stores.preview.setRoot(root)
 
