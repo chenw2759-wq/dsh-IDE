@@ -160,7 +160,11 @@ export class GitService {
     if (!gated.ok) return { ok: false, error: gated.error }
     const result = await this.run(['rev-parse', '--show-toplevel'], gated.canonical)
     if (result.exitCode !== 0) return { ok: false, error: NO_REPO }
-    const repo = result.stdout.trim()
+    // `git rev-parse` prints POSIX separators on Windows (M:/dsh); the gate
+    // compares with the canonical (backslash) form — normalize first or the
+    // inside-root check always fails and every repo reads as "not a repo".
+    let repo = result.stdout.trim()
+    if (process.platform === 'win32') repo = repo.replace(/\//g, '\\')
     if (repo === '' || !isPathInside(repo, gated.canonical)) return { ok: false, error: NO_REPO }
     return { ok: true, root: gated.canonical, repo }
   }
