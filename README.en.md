@@ -184,6 +184,21 @@ dsh plugin --profile web add file:C:/your-path/dsh-IDE/packages/dsh-easyssh
 
 > The repo is branded dsh-IDE; the core plugin package keeps the install id `dsh-easyssh`.
 
+> 💡 **pnpm build approval (one line)**: dsh-ssh depends on native libraries (ssh2 / cpu-features)
+> that need to be built. pnpm 10+ blocks dependency build scripts by default, so `dsh plugin add`
+> reports `ERR_PNPM_IGNORED_BUILDS: Ignored build scripts: cpu-features@0.0.10, ssh2@1.17.0` and
+> **writes placeholders automatically** into `<profile>/pnpm-workspace.yaml`:
+>
+> ```yaml
+> allowBuilds:
+>   cpu-features: set this to true or false
+>   ssh2: set this to true or false
+> ```
+>
+> Change both `set this to true or false` to `true`, then **re-run the `dsh plugin add` command from
+> step 2** (re-running is idempotent). This is the standard pnpm flow — the same for any plugin with
+> native dependencies.
+
 ### Step 3: seam switch (automatic — nothing to edit)
 
 Installing dsh-easyssh automatically applies its bundled `cordis.patch.yml` (declared via
