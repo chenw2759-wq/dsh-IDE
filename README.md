@@ -52,29 +52,57 @@ read / write / edit / glob / grep 与 bash / 终端在 SSH 模式下透明地在
 
 ## 界面截图
 
-![SSH 远程工作区设置](docs/screenshot-settings.png)
+![Markdown 预览](docs/markdown预览.png)
 
-设置面板中的「SSH 远程工作区」专区：管理主机、测试连接、进入 / 退出 SSH 模式。
+Markdown 文件在面板中直接渲染预览（青色标签）。
 
-![工作区文件预览与编辑](docs/screenshot-workspace.png)
+![Markdown 预览-右栏](docs/markdown预览-右栏.png)
 
-连接 SSH 后右侧面板显示远程文件树，下方可打开 `.py` 等文本文件查看并编辑保存（mtime 冲突检测）。
+布局切换为「右侧弹出」时，预览显示在右侧代码栏（⇉）。
 
-![DSH 主界面](docs/screenshot-gui-main.png)
+![Markdown 预览-下栏](docs/markdown预览-下栏.png)
 
-DSH Web GUI 主界面（深色主题）：右上角 SSH 配置/切换按钮，右侧文件面板随会话工作目录展示文件树。
+布局切换为「下框展示」时，预览显示在下栏（⇊）。
 
-![右侧文件面板](docs/screenshot-gui-panel.png)
+![左栏](docs/左栏.png)
 
-右侧上下分栏面板：上=文件树（文件名搜索定位），下=代码预览/编辑区；本地目录、SSH 远程目录自动切换。
+左侧文件树：懒加载、文件名搜索定位、右键菜单（下载 / 重命名 / 复制 / 粘贴 / 删除）。
 
-![JupyterLab 风格文件树](docs/screenshot-jupyter-tree.png)
+![状态栏](docs/状态栏.png)
 
-SSH 模式下的文件树：远程目录一目了然，点击文件即在下方/右侧打开。
+状态栏。
 
-![JupyterLab 风格代码编辑](docs/screenshot-jupyter-code.png)
+![支持代码即时编辑](docs/支持代码即时编辑.png)
 
-打开的代码文件带工具栏（分屏 / ▶ 运行 / >_ 终端 / 刷新），代码区行号 + 斑马底纹，可读写编辑。
+代码区即时编辑：行号 + 斑马底纹，可读写编辑、Ctrl+S 保存。
+
+![红绿标注](docs/红绿标注.png)
+
+Trae 风格编辑 diff：外部编辑 / 保存后自动弹出 Update 卡片，删除行红底、新增行绿底；全新文件全绿、删除文件全红。
+
+![颜色标记](docs/颜色标记.png)
+
+类型颜色标签：橙 = 图片、绿 = CSV、蓝 = Python、黄 = JS/TS、紫 = JSON、青 = Markdown、红 = diff、灰 = 日志。
+
+![命令行展示](docs/命令行展示.png)
+
+内置命令行终端（▶ 运行 / >_ 终端），本地与 SSH 远程一致。
+
+![日志预览](docs/日志预览.png)
+
+日志文件（灰色标签）预览。
+
+![图片预览](docs/图片预览.png)
+
+图片文件直接预览（橙色标签）。
+
+![CSV 预览](docs/csv预览.png)
+
+CSV 数据表渲染（绿色标签）。
+
+![HTML 预览](docs/html预览.png)
+
+HTML 文件源码 / 预览切换（紫色标签）。
 
 ### 操作速览
 
