@@ -125,6 +125,16 @@ HTML files support source / preview switching (purple tab).
   `remote_mkdir` / `remote_rm` / `remote_rename` / `remote_glob` / `remote_grep`, plus `ssh_exec` /
   `ssh_upload` / `ssh_download`.
 
+![SSH Configuration](docs/ssh配置.png)
+
+SSH host configuration: alias / host / port / user / password or key / remote root — save, test the
+connection, then enter SSH mode in one click.
+
+![SSH Remote Workspace](docs/ssh远程工作区.png)
+
+In SSH mode the right panel switches to the remote file tree, and read / write / edit / glob / grep and
+the terminal execute transparently on the remote server.
+
 ## Quick Start
 
 - **Switch layout**: the "⇊ / ⇉ / ⇱" button on the preview tab bar cycles bottom pane / right pane /

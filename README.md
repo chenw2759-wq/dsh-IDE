@@ -116,6 +116,14 @@ HTML 文件支持源码 / 预览切换（紫色标签）。
   `remote_rm` / `remote_rename` / `remote_glob` / `remote_grep`，以及 `ssh_exec` / `ssh_upload` /
   `ssh_download`。
 
+![SSH 配置](docs/ssh配置.png)
+
+SSH 主机配置：别名 / 主机 / 端口 / 用户名 / 密码或密钥 / 远程根目录，保存并测试连接后一键进入 SSH 模式。
+
+![SSH 远程工作区](docs/ssh远程工作区.png)
+
+进入 SSH 模式后，右侧面板自动切换为远程文件树，read / write / edit / glob / grep 与终端透明地在远程服务器执行。
+
 ## 操作速览
 
 - **布局切换**：预览 tab 条右侧「⇊ / ⇉ / ⇱」循环切换——下框展示 / 右侧弹出代码框 / 浮动覆盖（更宽）。
