@@ -1,0 +1,103 @@
+/* Settings modal for the right-side workspace. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel {
+  width: 420px;
+  max-width: 92vw;
+  max-height: 82vh;
+  overflow: auto;
+  background: var(--aion-bg-1, #1a1a1a);
+  border: 1px solid var(--aion-bg-3, #333);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  font-family: var(--aion-font-sans);
+  font-size: 13px;
+  color: var(--aion-text-primary);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--aion-bg-3, #333);
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.close {
+  background: transparent;
+  border: none;
+  color: var(--aion-text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.close:hover {
+  background: var(--aion-bg-2, #262626);
+  color: var(--aion-text-primary);
+}
+
+.section {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--aion-bg-3, #333);
+}
+
+.sectionTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--aion-text-secondary);
+  margin-bottom: 8px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  cursor: pointer;
+}
+
+.row input[type='checkbox'] {
+  accent-color: var(--aion-primary, #165dff);
+  cursor: pointer;
+}
+
+.rowLabel {
+  user-select: none;
+}
+
+.footer {
+  padding: 10px 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.reset {
+  background: transparent;
+  border: 1px solid var(--aion-bg-3, #333);
+  border-radius: 6px;
+  color: var(--aion-text-secondary);
+  font-size: 12px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.reset:hover {
+  border-color: var(--aion-danger);
+  color: var(--aion-danger);
+}

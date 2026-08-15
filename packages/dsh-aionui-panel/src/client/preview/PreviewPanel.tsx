@@ -14,6 +14,7 @@ import { t, format } from '../locales.ts'
 import { useStore } from '../hooks/useStore.ts'
 import type { PanelStores, PreviewTabState } from '../store.ts'
 import { ConfirmDialog, ContextMenu, type MenuState } from '../components/overlay.tsx'
+import { SettingsPanel } from '../components/SettingsPanel.tsx'
 import { PreviewTabs } from './PreviewTabs.tsx'
 import { PreviewToolbar, downloadTab } from './PreviewToolbar.tsx'
 import { TabContent } from './content.tsx'
@@ -30,6 +31,7 @@ export function PreviewPanel({ stores }: { stores: PanelStores }): JSX.Element {
   const [viewMode, setViewMode] = useState<'source' | 'preview'>('preview')
   const [split, setSplit] = useState(false)
   const [terminal, setTerminal] = useState<{ open: boolean; command?: string }>({ open: false })
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const lastDirtyCheck = useRef<Set<string>>(new Set())
 
   const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId) ?? null
@@ -144,6 +146,7 @@ export function PreviewPanel({ stores }: { stores: PanelStores }): JSX.Element {
         previewMode={layoutState.previewMode}
         onTogglePreviewMode={() => stores.layout.cyclePreviewMode()}
         onMoveTab={(id, targetId) => preview.moveTab(id, targetId)}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
       {activeTab !== null && (
         <>
@@ -184,6 +187,7 @@ export function PreviewPanel({ stores }: { stores: PanelStores }): JSX.Element {
         />
       )}
       {menu !== null && <ContextMenu state={menu} onClose={() => setMenu(null)} />}
+      {settingsOpen && <SettingsPanel stores={stores} onClose={() => setSettingsOpen(false)} />}
       {closingIds !== null && (
         <ConfirmDialog
           title={t('preview.closeConfirmTitle')}

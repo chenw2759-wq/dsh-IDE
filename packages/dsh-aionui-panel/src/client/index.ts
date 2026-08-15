@@ -20,6 +20,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import { PanelApi, subscribePanelEvents } from './api.ts'
 import { PanelLayoutController } from './layout.ts'
 import { createPanelStores, layoutSetRoot } from './store.ts'
+import { readSettings } from './settings.ts'
 import { mountPanels } from './mount.tsx'
 import { NS, dictionaries, setLanguage, type AionUiPanelKey } from './locales.ts'
 
@@ -46,7 +47,7 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => {
     const api = new PanelApi()
     const stores = createPanelStores(api)
-    const layout = new PanelLayoutController(stores.layout)
+    const layout = new PanelLayoutController(stores.layout, () => readSettings())
     const disposers: Array<() => void> = []
     let disposeEvents: (() => void) | undefined
     let currentRoot = ''
@@ -75,18 +76,22 @@ export function apply(ctx: ClientContext): void {
 
     const bindRoot = (): void => {
       const { root, sessionId } = resolveSession()
-      if (root === currentRoot && sessionId === currentSession) return
+      // Workspace setting: session isolation keeps per-session tree/preview
+      // memory keyed by the conversation id. Off shares one memory across all
+      // sessions (''), so switching sessions keeps the same folders/tabs.
+      const effectiveSession = readSettings().features.sessionIsolation === false ? '' : sessionId
+      if (root === currentRoot && effectiveSession === currentSession) return
       currentRoot = root
-      currentSession = sessionId
+      currentSession = effectiveSession
 
       disposeEvents?.()
       disposeEvents = undefined
       const previewOpen = stores.preview.getSnapshot().open
       lastPreviewOpen = previewOpen
       layoutSetRoot(stores.layout, root, previewOpen)
-      stores.explorer.setRoot(root, sessionId)
+      stores.explorer.setRoot(root, effectiveSession)
       stores.scm.setRoot(root)
-      stores.preview.setRoot(root, sessionId)
+      stores.preview.setRoot(root, effectiveSession)
 
       if (root === '') return
       disposeEvents = subscribePanelEvents(root, (event) => {

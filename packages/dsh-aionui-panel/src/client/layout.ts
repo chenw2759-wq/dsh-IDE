@@ -122,7 +122,10 @@ export class PanelLayoutController {
   private instantTimer: ReturnType<typeof setTimeout> | undefined
   private disposers: Array<() => void> = []
 
-  constructor(private readonly layout: LayoutStore) {}
+  constructor(
+    private readonly layout: LayoutStore,
+    private readonly settingsGetter?: () => { features: { terminalDock: boolean } },
+  ) {}
 
   /** Start watching for the frame and attach once it appears. */
   mount(): void {
@@ -496,6 +499,9 @@ export class PanelLayoutController {
     }
 
     // Integrated terminal: docked at the bottom fifth of the chat column.
+    // Workspace setting: terminalDock off hides the docked host entirely
+    // (the in-tab ▶ run / terminal buttons still work via the preview panel).
+    const terminalDock = this.settingsGetter?.()?.features.terminalDock ?? true
     const frameEl = this.frame
     const frameH = frameEl !== null && frameEl.clientHeight > 0
       ? frameEl.clientHeight
@@ -503,7 +509,7 @@ export class PanelLayoutController {
     const terminalH = Math.round(Math.min(400, Math.max(120, frameH * 0.2)))
     const sidebarPx = this.shellTracks.length >= 1 ? trackPx(this.shellTracks[0]) : 0
     if (this.terminalHost !== null) {
-      if (state.terminalOpen && state.root !== '') {
+      if (terminalDock && state.terminalOpen && state.root !== '') {
         this.terminalHost.style.display = 'flex'
         this.terminalHost.style.left = `${Math.round(sidebarPx)}px`
         this.terminalHost.style.right = `${Math.round(tripleWidth)}px`
@@ -514,7 +520,7 @@ export class PanelLayoutController {
       }
     }
     if (this.chatCol !== null) {
-      this.chatCol.style.paddingBottom = state.terminalOpen && state.root !== ''
+      this.chatCol.style.paddingBottom = terminalDock && state.terminalOpen && state.root !== ''
         ? `${terminalH}px`
         : ''
     }

@@ -51,11 +51,13 @@ export function ExplorerPanel({
 }): JSX.Element {
   const state = useStore(stores.explorer)
   const layoutState = useStore(stores.layout)
+  const settings = useStore(stores.settings)
   const [searchFocus, setSearchFocus] = useState(false)
   const [fileMenu, setFileMenu] = useState<FileMenuState | null>(null)
   const [renaming, setRenaming] = useState<RenameState | null>(null)
   const root = state.root
   const terminalOpen = layoutState.terminalOpen
+  const terminalDock = settings.features.terminalDock
 
   // Load the git badge map once the column mounts / the root changes.
   useEffect(() => {
@@ -84,14 +86,16 @@ export function ExplorerPanel({
         >
           {t('explorer.tabs.changes')}
         </button>
-        <button
-          type="button"
-          className={terminalOpen ? explorerCss.tabBtnActive : explorerCss.tabBtn}
-          onClick={() => stores.layout.setTerminalOpen(!terminalOpen)}
-          title={t('preview.terminal')}
-        >
-          &gt;_
-        </button>
+        {terminalDock && (
+          <button
+            type="button"
+            className={terminalOpen ? explorerCss.tabBtnActive : explorerCss.tabBtn}
+            onClick={() => stores.layout.setTerminalOpen(!terminalOpen)}
+            title={t('preview.terminal')}
+          >
+            &gt;_
+          </button>
+        )}
         <span
           className={explorerCss.watchHelp}
           title={t('explorer.watchHelp')}
@@ -307,6 +311,7 @@ function TreeRowBase({
 }): JSX.Element {
   const explorer = stores.explorer
   const preview = stores.preview
+  const settings = useStore(stores.settings)
   const isExpanded = expanded.includes(entry.path)
   const isSelected = selected === entry.path
   const children = entry.isDir ? dirs[entry.path] : undefined
@@ -373,7 +378,7 @@ function TreeRowBase({
           )}
           <FileTypeIcon name={entry.name} isDir={entry.isDir} expanded={isExpanded} />
           <span className={explorerCss.treeName}>{entry.name}</span>
-          {gitBadge !== undefined && (
+          {gitBadge !== undefined && settings.features.gitBadges && (
             <span
               className={explorerCss.gitBadge}
               style={{ color: GIT_BADGE_COLOR[gitBadge] ?? 'var(--aion-text-tertiary)' }}
@@ -382,7 +387,7 @@ function TreeRowBase({
               {gitBadge}
             </span>
           )}
-          {entry.isDir && (
+          {entry.isDir && settings.features.watchDots && (
             <button
               type="button"
               className={`${explorerCss.watchDot}${watch[entry.path] === 'shallow' ? ` ${explorerCss.watchDotShallow}` : watch[entry.path] === 'deep' ? ` ${explorerCss.watchDotDeep}` : ''}`}

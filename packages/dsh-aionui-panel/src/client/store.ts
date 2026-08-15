@@ -16,6 +16,7 @@ import { detectContentType, isTextType, tabIdOf } from './fileType.ts'
 import {
   evictPreviewScopes, readJson, readStoredNumber, writeJson, writeStoredNumber,
 } from './persist.ts'
+import { createSettingsStore, type SettingsStore } from './settings.ts'
 
 /**
  * Line-level diff of two texts (the Trae-style edit diff: deleted lines in
@@ -204,7 +205,9 @@ export type PreviewLayoutMode = (typeof PREVIEW_MODES)[number]
 export const collapseKey = (root: string): string => `${KEY_COLLAPSE}${root}`
 
 /** Create the layout store (reads persisted widths on init). */
-export function createLayoutStore(): LayoutStore {
+export function createLayoutStore(
+  settingsGetter?: () => { features: { tripleLayout: boolean } },
+): LayoutStore {
   const handle = createState<LayoutState>({
     root: '',
     explorerWidth: readStoredNumber(KEY_EXPLORER_WIDTH, MIN_WORKSPACE_PANEL_PX, MAX_WORKSPACE_PANEL_PX, DEFAULT_WORKSPACE_PANEL_PX),
@@ -239,7 +242,12 @@ export function createLayoutStore(): LayoutStore {
       }
     },
     cyclePreviewMode(): void {
-      const next = PREVIEW_MODES[(PREVIEW_MODES.indexOf(handle.getSnapshot().previewMode) + 1) % PREVIEW_MODES.length]
+      // Respect the workspace setting: when the triple-IDE layout is off, the
+      // cycle skips it (bottom → side → float → bottom).
+      const triple = settingsGetter?.()?.features.tripleLayout ?? true
+      const modes: readonly PreviewLayoutMode[] = triple ? PREVIEW_MODES : PREVIEW_MODES.filter((mode) => mode !== 'triple')
+      const current = handle.getSnapshot().previewMode
+      const next = modes[(modes.indexOf(current) + 1) % modes.length] ?? 'bottom'
       handle.update((prev) => (prev.previewMode === next ? prev : { ...prev, previewMode: next }))
       writeStoredNumber(KEY_PREVIEW_MODE, PREVIEW_MODES.indexOf(next))
     },
@@ -965,6 +973,7 @@ export function createPreviewStore(
   api: PanelApi,
   onAutoDiff?: () => void,
   watchGetter?: () => Record<string, 'shallow' | 'deep'>,
+  settingsGetter?: () => { features: { autoDiff: boolean } },
 ): PreviewStore {
   const handle = createState<PreviewState>({
     root: '',
@@ -1478,6 +1487,9 @@ export function createPreviewStore(
     async handleFsChange(rel?: string) {
       const state = handle.getSnapshot()
       if (state.root === '') return
+      // Workspace setting: autoDiff pops red/green diff cards on external
+      // edits. Off keeps tab content fresh but never pops the card.
+      const autoDiffEnabled = settingsGetter?.()?.features.autoDiff ?? true
       handle.update((prev) => ({ ...prev, version: prev.version + 1 }))
       // Diff tabs are derived views: any fs change may alter them, so refresh
       // them in place (never mark "updated" — the refresh is automatic).
@@ -1511,7 +1523,7 @@ export function createPreviewStore(
             // content, pop an ALL-RED diff — every line removed (once).
             const open = handle.getSnapshot().tabs.find((t) => t.root === root && t.path === rel && t.diff === undefined)
             if (open !== undefined && open.content !== null && !open.dirty && !open.deleted) {
-              this.openEditDiff(root, rel, open.title, open.baseContent ?? open.content, '', true)
+              if (autoDiffEnabled) this.openEditDiff(root, rel, open.title, open.baseContent ?? open.content, '', true)
               handle.update((prev) => ({
                 ...prev,
                 tabs: prev.tabs.map((t) => (t.id === open.id ? { ...t, deleted: true } : t)),
@@ -1532,7 +1544,8 @@ export function createPreviewStore(
       // file tab whose disk content moved away from its baseline. Deleted
       // lines render red, added lines green. Parallel reads keep bursts
       // smooth; the baseline is pushed forward by openEditDiff so each edit
-      // pops exactly once.
+      // pops exactly once. Respects the workspace setting (autoDiff off keeps
+      // the tab content fresh but never pops the card).
       const tabs = handle.getSnapshot().tabs.filter((tab) =>
         tab.content !== null
         && !tab.dirty
@@ -1551,7 +1564,7 @@ export function createPreviewStore(
           if (result.error?.code === 'not-found') {
             const current = handle.getSnapshot().tabs.find((item) => item.id === tab.id)
             if (current !== undefined && current.content !== null && !current.dirty && current.diff === undefined && !current.deleted) {
-              this.openEditDiff(state.root, tab.path, tab.title, current.baseContent ?? current.content, '', true)
+              if (autoDiffEnabled) this.openEditDiff(state.root, tab.path, tab.title, current.baseContent ?? current.content, '', true)
               handle.update((prev) => ({
                 ...prev,
                 tabs: prev.tabs.map((t) => (t.id === tab.id ? { ...t, deleted: true } : t)),
@@ -1572,6 +1585,7 @@ export function createPreviewStore(
             t.id === tab.id ? { ...t, content: disk, mtime: result.value.mtime ?? t.mtime } : t
           )),
         }))
+        if (!autoDiffEnabled) return
         // Fresh-write: an fs-change auto-open with NO baseline renders the
         // whole file as additions (all-green). The content read equals the
         // new disk state (disk === current.content), so the generic guard
@@ -1601,6 +1615,8 @@ export interface PanelStores {
   explorer: ExplorerStore
   scm: ScmStore
   preview: PreviewStore
+  /** Right-side workspace settings (feature toggles + editor tools). */
+  settings: SettingsStore
   /** The shared panel api (used by the file context menu). */
   api: PanelApi
 }
@@ -1613,20 +1629,21 @@ export interface PanelStoresWithFlush extends PanelStores {
 
 /** Create the full store bundle. */
 export function createPanelStores(api: PanelApi): PanelStoresWithFlush {
-  const layout = createLayoutStore()
+  const settings = createSettingsStore()
+  const layout = createLayoutStore(() => settings.getSnapshot())
   const explorer = createExplorerStore(api)
   const scm = createScmStore(api)
   // External edits pin the preview to the LOWER pane (右栏一分为二的下栏).
   const preview = createPreviewStore(api, () => {
     layout.setPreviewMode('bottom')
     layout.update((prev) => (prev.previewOpen ? prev : { ...prev, previewOpen: true }))
-  }, () => explorer.getSnapshot().watch)
+  }, () => explorer.getSnapshot().watch, () => settings.getSnapshot())
   const flushNow = (): void => {
     for (const store of [explorer, scm, preview]) {
       const flush = (store as unknown as Record<symbol, unknown>)[FLUSH_PERSIST]
       if (typeof flush === 'function') (flush as () => void)()
     }
   }
-  const stores: PanelStoresWithFlush = { layout, explorer, scm, preview, api, flushNow }
+  const stores: PanelStoresWithFlush = { layout, explorer, scm, preview, settings, api, flushNow }
   return stores
 }

@@ -14,6 +14,7 @@ import type { PreviewTabState } from '../store.ts'
 import { useResizableSplit } from '../hooks/useResizableSplit.ts'
 import { t } from '../locales.ts'
 import { hljsLanguageOf } from '../fileType.ts'
+import { readSettings } from '../settings.ts'
 import { renderMarkdown, resolveMarkdownImage } from './markdown.ts'
 import previewCss from '../styles/preview.module.css'
 
@@ -27,6 +28,7 @@ const HIGHLIGHT_CAP = 200_000
 
 /** Highlight one text (escaped fallback on unknown language or oversize). */
 function highlightHtml(content: string, language: string | undefined): string {
+  if (readSettings().features.syntaxHighlight === false) return escapeHtml(content)
   if (language === undefined || content.length > HIGHLIGHT_CAP) return escapeHtml(content)
   try {
     if (hljs.getLanguage(language) === undefined) return escapeHtml(content)
@@ -654,20 +656,26 @@ function Zoomable({ children }: { children: React.ReactNode }): JSX.Element {
     applyScale(scaleRef.current + delta)
   }
 
+  // The zoom feature can be switched off from the workspace settings; the
+  // preview then renders the content at natural size without the toolbar.
+  const zoomEnabled = readSettings().features.zoomPreview !== false
+
   return (
     <div className={previewCss.zoomWrap}>
-      <div className={previewCss.zoomBar}>
-        <button type="button" className={previewCss.zoomBtn} onClick={() => zoomBy(-0.25)} title={t('preview.zoomOut')}>−</button>
-        <span className={previewCss.zoomPct}>{Math.round(scale * 100)}%</span>
-        <button type="button" className={previewCss.zoomBtn} onClick={() => zoomBy(0.25)} title={t('preview.zoomIn')}>+</button>
-        <button type="button" className={previewCss.zoomBtn} onClick={() => applyScale(1)} title={t('preview.zoomReset')}>1:1</button>
-        <button type="button" className={previewCss.zoomBtn} onClick={fit} title={t('preview.zoomFit')}>{t('preview.zoomFitShort')}</button>
-      </div>
+      {zoomEnabled && (
+        <div className={previewCss.zoomBar}>
+          <button type="button" className={previewCss.zoomBtn} onClick={() => zoomBy(-0.25)} title={t('preview.zoomOut')}>−</button>
+          <span className={previewCss.zoomPct}>{Math.round(scale * 100)}%</span>
+          <button type="button" className={previewCss.zoomBtn} onClick={() => zoomBy(0.25)} title={t('preview.zoomIn')}>+</button>
+          <button type="button" className={previewCss.zoomBtn} onClick={() => applyScale(1)} title={t('preview.zoomReset')}>1:1</button>
+          <button type="button" className={previewCss.zoomBtn} onClick={fit} title={t('preview.zoomFit')}>{t('preview.zoomFitShort')}</button>
+        </div>
+      )}
       <div
         ref={bodyRef}
         className={previewCss.zoomBody}
         onWheel={(event) => {
-          if (!event.ctrlKey) return
+          if (!zoomEnabled || !event.ctrlKey) return
           event.preventDefault()
           zoomBy(event.deltaY < 0 ? 0.1 : -0.1)
         }}
@@ -679,18 +687,20 @@ function Zoomable({ children }: { children: React.ReactNode }): JSX.Element {
             flex item shrink below its content width. */}
         <div
           ref={contentRef}
-          style={{
-            transform: `scale(${scale})`,
-            transformOrigin: 'top left',
-            width: slot.w > 0 ? slot.w / scale : '100%',
-            height: slot.h > 0 ? slot.h / scale : '100%',
-            // The zoom body is a flex row: without flex:0 0 auto the item's
-            // flex-shrink would crush the explicitly sized slot back down to
-            // the content width (the zoom-out "whole frame shrinks" bug).
-            flex: '0 0 auto',
-            minWidth: 0,
-            minHeight: 0,
-          }}
+          style={zoomEnabled
+            ? {
+                transform: `scale(${scale})`,
+                transformOrigin: 'top left',
+                width: slot.w > 0 ? slot.w / scale : '100%',
+                height: slot.h > 0 ? slot.h / scale : '100%',
+                // The zoom body is a flex row: without flex:0 0 auto the item's
+                // flex-shrink would crush the explicitly sized slot back down to
+                // the content width (the zoom-out "whole frame shrinks" bug).
+                flex: '0 0 auto',
+                minWidth: 0,
+                minHeight: 0,
+              }
+            : undefined}
         >
           {children}
         </div>
