@@ -107,6 +107,8 @@ export class PanelLayoutController {
   private panelCol: HTMLDivElement | null = null
   private explorerCol: HTMLDivElement | null = null
   private previewCol: HTMLDivElement | null = null
+  private terminalHost: HTMLDivElement | null = null
+  private chatCol: HTMLElement | null = null
   private widthHandle: HTMLDivElement | null = null
   private heightHandle: HTMLDivElement | null = null
   private floatingButton: HTMLButtonElement | null = null
@@ -191,6 +193,19 @@ export class PanelLayoutController {
     this.panelCol = panelCol
     this.explorerCol = explorerCol
     this.previewCol = previewCol
+
+    // The integrated terminal host: docks over the BOTTOM FIFTH of the CHAT
+    // column (the second grid child), never over the panels. The chat column
+    // gets a matching bottom padding so the two never overlap.
+    const terminalHost = document.createElement('div')
+    terminalHost.dataset.aionuiTerminalHost = ''
+    terminalHost.style.position = 'absolute'
+    terminalHost.style.zIndex = '26'
+    terminalHost.style.display = 'none'
+    frame.appendChild(terminalHost)
+    this.terminalHost = terminalHost
+    const chatCandidate = frame.children[1] as HTMLElement | undefined
+    if (chatCandidate !== undefined && chatCandidate !== panelCol) this.chatCol = chatCandidate
 
     // The vertical width handle (out of the grid flow), on the column's left
     // edge: dragging left widens (reverse).
@@ -478,6 +493,30 @@ export class PanelLayoutController {
     if (this.floatingButton !== null) {
       const show = state.root !== '' && state.explorerCollapsed
       this.floatingButton.style.display = show ? 'flex' : 'none'
+    }
+
+    // Integrated terminal: docked at the bottom fifth of the chat column.
+    const frameEl = this.frame
+    const frameH = frameEl !== null && frameEl.clientHeight > 0
+      ? frameEl.clientHeight
+      : frameEl !== null ? frameEl.getBoundingClientRect().height : 0
+    const terminalH = Math.round(Math.min(400, Math.max(120, frameH * 0.2)))
+    const sidebarPx = this.shellTracks.length >= 1 ? trackPx(this.shellTracks[0]) : 0
+    if (this.terminalHost !== null) {
+      if (state.terminalOpen && state.root !== '') {
+        this.terminalHost.style.display = 'flex'
+        this.terminalHost.style.left = `${Math.round(sidebarPx)}px`
+        this.terminalHost.style.right = `${Math.round(tripleWidth)}px`
+        this.terminalHost.style.bottom = '0'
+        this.terminalHost.style.height = `${terminalH}px`
+      } else {
+        this.terminalHost.style.display = 'none'
+      }
+    }
+    if (this.chatCol !== null) {
+      this.chatCol.style.paddingBottom = state.terminalOpen && state.root !== ''
+        ? `${terminalH}px`
+        : ''
     }
   }
 

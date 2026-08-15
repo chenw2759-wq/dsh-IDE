@@ -236,6 +236,56 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Watch-level dot on directory rows: grey = default (first level),
+   amber = watch next level, green = watch all levels. */
+.watchDot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  margin-left: 4px;
+  padding: 0;
+  border: 1px solid var(--aion-bg-4, #555);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.12s ease, background-color 0.12s ease;
+}
+
+.watchDot:hover {
+  opacity: 1;
+}
+
+.watchDotShallow {
+  background: #fbbf24;
+  border-color: #fbbf24;
+  opacity: 0.95;
+}
+
+.watchDotDeep {
+  background: #22c55e;
+  border-color: #22c55e;
+  opacity: 0.95;
+}
+
+/* Watch-rules explainer box in the explorer tab bar. */
+.watchHelp {
+  margin-left: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--aion-bg-3, #333);
+  border-radius: 6px;
+  font-size: 10.5px;
+  color: var(--aion-text-tertiary);
+  background: var(--aion-bg-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+  cursor: help;
+  user-select: none;
+}
+
 /* Inline rename input row. */
 .renameInput {
   flex: 1;

@@ -21,7 +21,6 @@ import type { PanelStores } from '../store.ts'
 import { FileTypeIcon } from './FileIcon.tsx'
 import { ChevronRightIcon, CloseIcon, ExpandRightIcon, SearchIcon } from './icons.tsx'
 import { ScmPanel } from './ScmPanel.tsx'
-import { TerminalPanel } from '../preview/TerminalPanel.tsx'
 import { activateOnKey } from './a11y.ts'
 import { FileContextMenu, type FileMenuState } from './FileContextMenu.tsx'
 import explorerCss from '../styles/explorer.module.css'
@@ -51,11 +50,12 @@ export function ExplorerPanel({
   onToggleCollapse: () => void
 }): JSX.Element {
   const state = useStore(stores.explorer)
+  const layoutState = useStore(stores.layout)
   const [searchFocus, setSearchFocus] = useState(false)
   const [fileMenu, setFileMenu] = useState<FileMenuState | null>(null)
-  const [terminalOpen, setTerminalOpen] = useState(false)
   const [renaming, setRenaming] = useState<RenameState | null>(null)
   const root = state.root
+  const terminalOpen = layoutState.terminalOpen
 
   // Load the git badge map once the column mounts / the root changes.
   useEffect(() => {
@@ -87,11 +87,17 @@ export function ExplorerPanel({
         <button
           type="button"
           className={terminalOpen ? explorerCss.tabBtnActive : explorerCss.tabBtn}
-          onClick={() => setTerminalOpen((open) => !open)}
+          onClick={() => stores.layout.setTerminalOpen(!terminalOpen)}
           title={t('preview.terminal')}
         >
           &gt;_
         </button>
+        <span
+          className={explorerCss.watchHelp}
+          title={t('explorer.watchHelp')}
+        >
+          {t('explorer.watchHelpShort')}
+        </span>
         <button
           type="button"
           className="aionui-collapse-chevron"
@@ -105,21 +111,17 @@ export function ExplorerPanel({
       </div>
 
       {/* Files tab: search + tree (kept mounted; hidden when changes is active). */}
-      {terminalOpen ? (
-        <TerminalPanel root={root} onClose={() => setTerminalOpen(false)} />
-      ) : (
-        <div style={{ display: state.activeTab === 'files' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-          <SearchArea
-            stores={stores}
-            searchFocus={searchFocus}
-            onFocusChange={setSearchFocus}
-          />
-          <FileTree stores={stores} onContextMenu={setFileMenu} renaming={renaming} onRenameDone={() => setRenaming(null)} />
-        </div>
-      )}
+      <div style={{ display: state.activeTab === 'files' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        <SearchArea
+          stores={stores}
+          searchFocus={searchFocus}
+          onFocusChange={setSearchFocus}
+        />
+        <FileTree stores={stores} onContextMenu={setFileMenu} renaming={renaming} onRenameDone={() => setRenaming(null)} />
+      </div>
 
       {/* Changes tab: SCM (mounted on demand; its store outlives the tab). */}
-      {!terminalOpen && state.activeTab === 'changes' && <ScmPanel stores={stores} />}
+      {state.activeTab === 'changes' && <ScmPanel stores={stores} />}
 
       {fileMenu !== null && (
         <FileContextMenu
@@ -264,6 +266,7 @@ function FileTree({
           dirs={state.dirs}
           root={state.root}
           git={state.git}
+          watch={state.watch}
           renaming={renaming}
           stores={stores}
           onContextMenu={onContextMenu}
@@ -283,6 +286,7 @@ function TreeRowBase({
   dirs,
   root,
   git,
+  watch,
   renaming,
   stores,
   onContextMenu,
@@ -295,6 +299,7 @@ function TreeRowBase({
   dirs: Record<string, FsEntry[]>
   root: string
   git: Record<string, string>
+  watch: Record<string, 'shallow' | 'deep'>
   renaming: RenameState | null
   stores: PanelStores
   onContextMenu?: (menu: FileMenuState) => void
@@ -377,6 +382,22 @@ function TreeRowBase({
               {gitBadge}
             </span>
           )}
+          {entry.isDir && (
+            <button
+              type="button"
+              className={`${explorerCss.watchDot}${watch[entry.path] === 'shallow' ? ` ${explorerCss.watchDotShallow}` : watch[entry.path] === 'deep' ? ` ${explorerCss.watchDotDeep}` : ''}`}
+              title={watch[entry.path] === 'shallow'
+                ? t('explorer.watchShallow')
+                : watch[entry.path] === 'deep'
+                  ? t('explorer.watchDeep')
+                  : t('explorer.watchDefault')}
+              aria-label={t('explorer.watchToggle')}
+              onClick={(event) => {
+                event.stopPropagation()
+                explorer.toggleWatch(entry.path)
+              }}
+            />
+          )}
         </div>
       )}
       {entry.isDir && isExpanded && children !== undefined && (
@@ -391,6 +412,7 @@ function TreeRowBase({
               dirs={dirs}
               root={root}
               git={git}
+              watch={watch}
               renaming={renaming}
               stores={stores}
               onContextMenu={onContextMenu}

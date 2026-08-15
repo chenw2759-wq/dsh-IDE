@@ -86,7 +86,7 @@ export function apply(ctx: ClientContext): void {
       layoutSetRoot(stores.layout, root, previewOpen)
       stores.explorer.setRoot(root, sessionId)
       stores.scm.setRoot(root)
-      stores.preview.setRoot(root)
+      stores.preview.setRoot(root, sessionId)
 
       if (root === '') return
       disposeEvents = subscribePanelEvents(root, (event) => {

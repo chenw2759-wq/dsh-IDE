@@ -7,12 +7,22 @@
  */
 
 import { createRoot, type Root } from 'react-dom/client'
+import type { JSX } from 'react'
 import type { PanelStores } from './store.ts'
+import { useStore } from './hooks/useStore.ts'
 import { ExplorerPanel } from './components/ExplorerPanel.tsx'
 import { PreviewPanel } from './preview/PreviewPanel.tsx'
+import { TerminalPanel } from './preview/TerminalPanel.tsx'
 
 const EXPLORER_COL_SELECTOR = '[data-aionui-explorer-col]'
 const PREVIEW_COL_SELECTOR = '[data-aionui-preview-col]'
+const TERMINAL_HOST_SELECTOR = '[data-aionui-terminal-host]'
+
+/** Terminal wrapper: follows the active project root as sessions switch. */
+function TerminalMounter({ stores }: { stores: PanelStores }): JSX.Element {
+  const root = useStore(stores.explorer).root
+  return <TerminalPanel root={root} onClose={() => stores.layout.setTerminalOpen(false)} />
+}
 
 /** Wait for one selector (the shell/frame mounts after boot settlement). */
 function waitForElement(selector: string, onFound: (el: HTMLElement) => void): () => void {
@@ -44,6 +54,7 @@ function waitForElement(selector: string, onFound: (el: HTMLElement) => void): (
 export function mountPanels(stores: PanelStores, onToggleExplorer: () => void): () => void {
   let explorerRoot: Root | undefined
   let previewRoot: Root | undefined
+  let terminalRoot: Root | undefined
   const disposers: Array<() => void> = []
 
   disposers.push(waitForElement(EXPLORER_COL_SELECTOR, (el) => {
@@ -54,10 +65,15 @@ export function mountPanels(stores: PanelStores, onToggleExplorer: () => void): 
     previewRoot = createRoot(el)
     previewRoot.render(<PreviewPanel stores={stores} />)
   }))
+  disposers.push(waitForElement(TERMINAL_HOST_SELECTOR, (el) => {
+    terminalRoot = createRoot(el)
+    terminalRoot.render(<TerminalMounter stores={stores} />)
+  }))
 
   return () => {
     for (const dispose of disposers) dispose()
     explorerRoot?.unmount()
     previewRoot?.unmount()
+    terminalRoot?.unmount()
   }
 }

@@ -118,7 +118,12 @@ export function TerminalPanel({
   return (
     <div className={terminalCss.panel}>
       <div className={terminalCss.header}>
-        <span className={terminalCss.title}>⚡ {t('preview.terminal')}</span>
+        <span className={terminalCss.dots} aria-hidden="true">
+          <span className={`${terminalCss.dot} ${terminalCss.dotRed}`} />
+          <span className={`${terminalCss.dot} ${terminalCss.dotYellow}`} />
+          <span className={`${terminalCss.dot} ${terminalCss.dotGreen}`} />
+        </span>
+        <span className={terminalCss.title}>{t('preview.terminal')}</span>
         <button type="button" className={terminalCss.closeBtn} onClick={onClose} aria-label={t('common.close')}>
           ✕
         </button>
@@ -128,27 +133,26 @@ export function TerminalPanel({
         {records.map((record, index) => (
           <div key={index} className={terminalCss.record}>
             <div className={terminalCss.promptLine}>
-              <span className={terminalCss.prompt}>{record.cwd ?? ''}</span>
+              <span className={terminalCss.prompt} aria-hidden="true">❯</span>
+              <span className={terminalCss.cwd}>{record.cwd ?? ''}</span>
               <span className={terminalCss.command}>{record.command}</span>
             </div>
-            {record.running && <div className={terminalCss.running}>{t('preview.terminalRunning')}</div>}
             {record.stdout !== '' && <pre className={terminalCss.stdout}>{record.stdout}</pre>}
             {record.stderr !== '' && <pre className={terminalCss.stderr}>{record.stderr}</pre>}
-            {record.done && (
-              <div className={record.code === 0 ? terminalCss.doneOk : terminalCss.doneFail}>
-                {record.code === 0 ? t('preview.terminalOk') : `${t('preview.terminalFail')} (${record.code ?? '?'})`}
-              </div>
-            )}
           </div>
         ))}
       </div>
       <div className={terminalCss.inputRow} onMouseDown={keepFocus}>
+        <span className={terminalCss.prompt} aria-hidden="true">❯</span>
         <input
           ref={inputRef}
           className={terminalCss.input}
           value={input}
           placeholder={t('preview.terminalPlaceholder')}
           spellCheck={false}
+          autoCapitalize="off"
+          autoComplete="off"
+          autoCorrect="off"
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
@@ -158,14 +162,6 @@ export function TerminalPanel({
             event.stopPropagation()
           }}
         />
-        <button
-          type="button"
-          className={terminalCss.runBtn}
-          disabled={input.trim() === ''}
-          onClick={() => { execute(input); setInput('') }}
-        >
-          {t('preview.run')}
-        </button>
       </div>
     </div>
   )

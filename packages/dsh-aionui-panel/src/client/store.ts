@@ -173,6 +173,8 @@ export interface LayoutState {
   availableWidth: number
   /** True while a panel drag is in flight (disables transitions). */
   dragging: boolean
+  /** Integrated terminal: docked at the bottom fifth of the CHAT column. */
+  terminalOpen: boolean
 }
 
 /** The layout store plus its pure width math. */
@@ -187,6 +189,8 @@ export interface LayoutStore extends StateHandle<LayoutState> {
   cyclePreviewMode: () => void
   /** Set the preview mode explicitly. */
   setPreviewMode: (mode: 'bottom' | 'side' | 'float' | 'triple') => void
+  /** Open / close the integrated terminal. */
+  setTerminalOpen: (open: boolean) => void
 }
 
 /** Storage key of the preview-mode preference (global, not per-root). */
@@ -210,6 +214,7 @@ export function createLayoutStore(): LayoutStore {
     previewMode: PREVIEW_MODES[readStoredNumber(KEY_PREVIEW_MODE, 0, PREVIEW_MODES.length - 1, 0)] ?? 'bottom',
     availableWidth: 0,
     dragging: false,
+    terminalOpen: false,
   })
   const store: LayoutStore = Object.assign(handle, {
     explorerWidthPx(state: LayoutState): number {
@@ -241,6 +246,9 @@ export function createLayoutStore(): LayoutStore {
     setPreviewMode(mode: 'bottom' | 'side' | 'float' | 'triple'): void {
       handle.update((prev) => (prev.previewMode === mode ? prev : { ...prev, previewMode: mode }))
       writeStoredNumber(KEY_PREVIEW_MODE, PREVIEW_MODES.indexOf(mode))
+    },
+    setTerminalOpen(open: boolean): void {
+      handle.update((prev) => (prev.terminalOpen === open ? prev : { ...prev, terminalOpen: open }))
     },
   })
   return store
@@ -290,6 +298,9 @@ export interface ExplorerState {
   version: number
   /** Git status per rel path ('' = not a change): A/M/D/R/U/C — tree badges. */
   git: Record<string, string>
+  /** Watch marks per directory rel: 'shallow' = watch its direct children,
+   *  'deep' = watch everything under it. Absent = default (first level). */
+  watch: Record<string, 'shallow' | 'deep'>
 }
 
 /** The explorer store with its async actions. */
@@ -305,18 +316,26 @@ export interface ExplorerStore extends StateHandle<ExplorerState> {
   handleFsChange: () => void
   /** Refresh the git-status badge map (call after mount / git events). */
   refreshGitStatus: () => Promise<void>
+  /** Cycle a directory's watch mark: none → shallow → deep → none. */
+  toggleWatch: (rel: string) => void
 }
 
 /** Read the persisted explorer UI state for a session+root (range-guarded).
  *  Isolation is per SESSION so each conversation remembers its own expanded
  *  folders; a session without any memory just sees the workspace. */
-export function readExplorerUi(session: string, root: string): { expanded: string[]; selected: string | null } {
-  const stored = readJson<{ expanded?: unknown; selected?: unknown }>(`${KEY_EXPLORER_UI}${session}:${root}`, {})
+export function readExplorerUi(session: string, root: string): { expanded: string[]; selected: string | null; watch: Record<string, 'shallow' | 'deep'> } {
+  const stored = readJson<{ expanded?: unknown; selected?: unknown; watch?: unknown }>(`${KEY_EXPLORER_UI}${session}:${root}`, {})
   const expanded = Array.isArray(stored.expanded)
     ? stored.expanded.filter((item): item is string => typeof item === 'string')
     : []
   const selected = typeof stored.selected === 'string' ? stored.selected : null
-  return { expanded, selected }
+  const watch: Record<string, 'shallow' | 'deep'> = {}
+  if (typeof stored.watch === 'object' && stored.watch !== null) {
+    for (const [key, value] of Object.entries(stored.watch as Record<string, unknown>)) {
+      if (value === 'shallow' || value === 'deep') watch[key] = value
+    }
+  }
+  return { expanded, selected, watch }
 }
 
 const EMPTY_SEARCH = { query: '', status: 'idle' as const, hits: [], truncated: false }
@@ -347,6 +366,26 @@ function isNoisePath(rel: string): boolean {
   return false
 }
 
+/**
+ * Whether a changed path should AUTO-OPEN, given the per-directory watch
+ * marks. Default watches only the FIRST level: files directly under the root
+ * and files directly under a first-level directory. A marked directory
+ * extends that: 'shallow' watches its direct children, 'deep' watches the
+ * whole subtree. Noise paths never auto-open regardless of marks.
+ */
+export function shouldAutoOpen(rel: string, watch: Record<string, 'shallow' | 'deep'>): boolean {
+  if (isNoisePath(rel)) return false
+  const parts = rel.split('/').filter(Boolean)
+  if (parts.length <= 2) return true
+  for (let i = parts.length - 2; i >= 1; i -= 1) {
+    const dir = parts.slice(0, i).join('/')
+    const mark = watch[dir]
+    if (mark === 'deep') return true
+    if (mark === 'shallow' && i === parts.length - 1) return true
+  }
+  return false
+}
+
 /** Create the explorer store (per-root persistence, debounced writes). */
 export function createExplorerStore(api: PanelApi): ExplorerStore {
   const handle = createState<ExplorerState>({
@@ -360,6 +399,7 @@ export function createExplorerStore(api: PanelApi): ExplorerStore {
     search: { ...EMPTY_SEARCH },
     version: 0,
     git: {},
+    watch: {},
   })
 
   let persistTimer: ReturnType<typeof setTimeout> | undefined
@@ -373,7 +413,12 @@ export function createExplorerStore(api: PanelApi): ExplorerStore {
     if (persistTimer !== undefined) clearTimeout(persistTimer)
     persistTimer = undefined
     if (persistRoot !== '') {
-      writeJson(`${KEY_EXPLORER_UI}${persistSession}:${persistRoot}`, { expanded: persistExpanded, selected: persistSelected })
+      const snap = handle.getSnapshot()
+      writeJson(`${KEY_EXPLORER_UI}${persistSession}:${persistRoot}`, {
+        expanded: persistExpanded,
+        selected: persistSelected,
+        watch: snap.watch,
+      })
     }
   }
   const schedulePersist = (root: string, session: string, expanded: string[], selected: string | null): void => {
@@ -444,10 +489,23 @@ export function createExplorerStore(api: PanelApi): ExplorerStore {
           loading: [],
           search: { ...EMPTY_SEARCH },
           git: {},
+          watch: ui.watch,
         }
       })
       void ensureDir(root, '')
       void store.refreshGitStatus()
+    },
+    toggleWatch(rel: string) {
+      handle.update((prev) => {
+        const current = prev.watch[rel]
+        const next = current === 'shallow' ? 'deep' : current === 'deep' ? undefined : 'shallow'
+        const watch = { ...prev.watch }
+        if (next === undefined) delete watch[rel]
+        else watch[rel] = next
+        return { ...prev, watch }
+      })
+      const state = handle.getSnapshot()
+      schedulePersist(state.root, state.session, state.expanded, state.selected)
     },
     async refreshGitStatus() {
       const root = handle.getSnapshot().root
@@ -824,6 +882,8 @@ export interface PreviewTabState {
 /** Preview panel state. */
 export interface PreviewState {
   root: string
+  /** The session this preview belongs to (per-session tab memory). */
+  session: string
   open: boolean
   tabs: PreviewTabState[]
   activeTabId: string | null
@@ -833,7 +893,7 @@ export interface PreviewState {
 
 /** The preview store with its async actions. */
 export interface PreviewStore extends StateHandle<PreviewState> {
-  setRoot: (root: string) => void
+  setRoot: (root: string, session?: string) => void
   openFile: (root: string, path: string) => void
   openDiff: (root: string, path: string, staged: boolean) => void
   /** Open a Trae-style edit diff (red deletes / green adds) for one save or
@@ -866,9 +926,9 @@ interface PersistedTab {
   savedAt: number
 }
 
-/** Read persisted tabs for a root (guarded, content-less). */
-export function readPreviewTabs(root: string): PersistedTab[] {
-  const stored = readJson<{ savedAt?: unknown; tabs?: unknown }>(`preview-ui:${root}`, {})
+/** Read persisted tabs for a session+root (guarded, content-less). */
+export function readPreviewTabs(session: string, root: string): PersistedTab[] {
+  const stored = readJson<{ savedAt?: unknown; tabs?: unknown }>(`preview-ui:${session}:${root}`, {})
   if (!Array.isArray(stored.tabs)) return []
   const out: PersistedTab[] = []
   for (const item of stored.tabs) {
@@ -899,9 +959,14 @@ export function readPreviewTabs(root: string): PersistedTab[] {
  * @param onAutoDiff - fired when an EXTERNAL edit pops an auto diff into the
  *   lower pane (lets the layout pin the preview to the bottom region).
  */
-export function createPreviewStore(api: PanelApi, onAutoDiff?: () => void): PreviewStore {
+export function createPreviewStore(
+  api: PanelApi,
+  onAutoDiff?: () => void,
+  watchGetter?: () => Record<string, 'shallow' | 'deep'>,
+): PreviewStore {
   const handle = createState<PreviewState>({
     root: '',
+    session: '',
     open: false,
     tabs: [],
     activeTabId: null,
@@ -923,8 +988,8 @@ export function createPreviewStore(api: PanelApi, onAutoDiff?: () => void): Prev
       diff: tab.diff,
       savedAt: tab.savedAt,
     }))
-    writeJson(`preview-ui:${current.root}`, { savedAt: Date.now(), tabs: meta })
-    evictPreviewScopes(current.root)
+    writeJson(`preview-ui:${current.session}:${current.root}`, { savedAt: Date.now(), tabs: meta })
+    evictPreviewScopes(`${current.session}:${current.root}`)
   }
   const schedulePersist = (state: PreviewState): void => {
     if (state.root === '') return
@@ -1053,10 +1118,10 @@ export function createPreviewStore(api: PanelApi, onAutoDiff?: () => void): Prev
   }
 
   const store: PreviewStore = Object.assign(handle, {
-    setRoot(root: string) {
+    setRoot(root: string, session = '') {
       handle.update((prev) => {
-        if (prev.root === root) return prev
-        const persisted = readPreviewTabs(root)
+        if (prev.root === root && prev.session === session) return prev
+        const persisted = readPreviewTabs(session, root)
         const tabs: PreviewTabState[] = persisted.map((meta) => ({
           id: meta.id,
           title: meta.title,
@@ -1073,7 +1138,7 @@ export function createPreviewStore(api: PanelApi, onAutoDiff?: () => void): Prev
           savedAt: meta.savedAt,
         }))
         const activeTabId = tabs.length > 0 ? tabs[tabs.length - 1].id : null
-        return { ...prev, root, tabs, activeTabId, open: tabs.length > 0 }
+        return { ...prev, root, session, tabs, activeTabId, open: tabs.length > 0 }
       })
       const state = handle.getSnapshot()
       if (state.activeTabId !== null) void loadContent(root, state.activeTabId)
@@ -1418,11 +1483,10 @@ export function createPreviewStore(api: PanelApi, onAutoDiff?: () => void): Prev
 
       // AUTO-OPEN: an EXTERNAL edit (agent tool / other process) to a file
       // that is not open yet — pop it open so the edit is immediately visible
-      // (vibecoding behavior). EVERY modified file auto-opens, whatever its
-      // type (code, text, csv, image, office…) — except dependency/ignored
-      // noise (dependency dirs, build outputs, temp files, lockfiles) whose
-      // churn is never the user's working code.
-      if (rel !== undefined && rel !== '' && !rel.includes('\u0000') && !isNoisePath(rel)) {
+      // (vibecoding behavior). Scope: the default first level, plus any
+      // directory the user marked (shallow = next level, deep = all levels);
+      // noise paths never pop regardless of marks.
+      if (rel !== undefined && rel !== '' && !rel.includes('\u0000') && shouldAutoOpen(rel, watchGetter?.() ?? {})) {
         const root = handle.getSnapshot().root
         const openTabs = handle.getSnapshot().tabs
         const alreadyOpen = openTabs.some((tab) => tab.root === root && tab.path === rel)
@@ -1554,7 +1618,7 @@ export function createPanelStores(api: PanelApi): PanelStoresWithFlush {
   const preview = createPreviewStore(api, () => {
     layout.setPreviewMode('bottom')
     layout.update((prev) => (prev.previewOpen ? prev : { ...prev, previewOpen: true }))
-  })
+  }, () => explorer.getSnapshot().watch)
   const flushNow = (): void => {
     for (const store of [explorer, scm, preview]) {
       const flush = (store as unknown as Record<symbol, unknown>)[FLUSH_PERSIST]
