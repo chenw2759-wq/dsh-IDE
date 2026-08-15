@@ -1,123 +1,124 @@
 {
-  "name": "dsh-easyssh",
-  "description": "SSH remote workspace for the dsh web GUI: enter SSH mode from the session header (left of session log), browse/edit remote files in a new left panel, and let the local harness operate the remote server through remote_* agent tools. Reuses the dsh-ssh engine, host store, and loopback trust fence.",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "keywords": [
-    "dsh",
-    "deepseek-harness",
-    "dsh-plugin",
-    "ssh",
-    "remote-development",
-    "sftp"
-  ],
-  "packageManager": "pnpm@11.7.0",
-  "engines": {
-    "node": "^22.19.0 || >=24.0.0"
-  },
-  "main": "lib/index.js",
-  "types": "lib/types/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./lib/types/index.d.ts",
-      "default": "./lib/index.js"
-    },
-    "./fs": {
-      "types": "./lib/types/fs.d.ts",
-      "default": "./lib/fs.js"
-    },
-    "./subprocess": {
-      "types": "./lib/types/subprocess.d.ts",
-      "default": "./lib/subprocess.js"
-    },
-    "./client": {
-      "types": "./lib/types/client/index.d.ts",
-      "default": "./lib/client.js"
-    },
-    "./src/*": "./src/*",
-    "./package.json": "./package.json"
-  },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    },
-    "client": {
-      "inject": [
-        "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-connection",
-        "@deepseek-ai/dsh-client-ui-settings"
-      ],
-      "platform": "web"
-    }
-  },
-  "scripts": {
-    "build": "tsc -b && tsdown",
-    "bundle": "tsdown",
-    "watch": "tsdown --watch",
-    "typecheck": "tsc -b --pretty false",
-    "test": "vitest run"
-  },
-  "dependencies": {
-    "@deepseek-ai/dsh-ssh": "file:../dsh-ssh"
-  },
-  "peerDependencies": {
-    "@deepseek-ai/dsh-client-connection": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-locale": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-ui-settings": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-ui-sidebar": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-fs": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-fs-sandbox": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-host-webserver": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-subprocess": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-subprocess-local": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-system-prompt": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-timeout": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
-  },
-  "devDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-client-connection": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-locale": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-ui-settings": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-ui-sidebar": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-fs": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-fs-local": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-fs-sandbox": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-host-webserver": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-invariants": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-llm": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-sandbox": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-sandbox-policy": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-subprocess": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-subprocess-local": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-system-prompt": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-timeout": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
-    "@types/node": "^22.20.0",
-    "@types/react": "~18.3.1",
-    "@types/react-dom": "^18.3.5",
-    "jsdom": "^25.0.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "schemastery": "^3.18.0",
-    "tsdown": "0.22.2",
-    "typescript": "~5.7.2",
-    "vitest": "^3.0.0"
-  },
-  "files": [
-    "lib/*.js",
-    "lib/types/**/*.d.ts",
-    "src",
-    "cordis.patch.yml",
-    "README.md"
-  ],
-  "license": "BSD-3-Clause"
+    "name":  "dsh-easyssh",
+    "description":  "SSH remote workspace for the dsh web GUI: enter SSH mode from the session header (left of session log), browse/edit remote files in a new left panel, and let the local harness operate the remote server through remote_* agent tools. Reuses the dsh-ssh engine, host store, and loopback trust fence.",
+    "version":  "0.1.0",
+    "private":  true,
+    "type":  "module",
+    "keywords":  [
+                     "dsh",
+                     "deepseek-harness",
+                     "dsh-plugin",
+                     "ssh",
+                     "remote-development",
+                     "sftp"
+                 ],
+    "packageManager":  "pnpm@11.7.0",
+    "engines":  {
+                    "node":  "^22.19.0 || \u003e=24.0.0"
+                },
+    "main":  "lib/index.js",
+    "types":  "lib/types/index.d.ts",
+    "exports":  {
+                    ".":  {
+                              "types":  "./lib/types/index.d.ts",
+                              "default":  "./lib/index.js"
+                          },
+                    "./fs":  {
+                                 "types":  "./lib/types/fs.d.ts",
+                                 "default":  "./lib/fs.js"
+                             },
+                    "./subprocess":  {
+                                         "types":  "./lib/types/subprocess.d.ts",
+                                         "default":  "./lib/subprocess.js"
+                                     },
+                    "./client":  {
+                                     "types":  "./lib/types/client/index.d.ts",
+                                     "default":  "./lib/client.js"
+                                 },
+                    "./src/*":  "./src/*",
+                    "./package.json":  "./package.json"
+                },
+    "dsh":  {
+                "bundle":  {
+                               "patch":  "./cordis.patch.yml"
+                           },
+                "client":  {
+                               "inject":  [
+                                              "@deepseek-ai/dsh-client-runtime",
+                                              "@deepseek-ai/dsh-client-connection",
+                                              "@deepseek-ai/dsh-client-ui-settings"
+                                          ],
+                               "platform":  "web"
+                           }
+            },
+    "scripts":  {
+                    "build":  "tsc -b \u0026\u0026 tsdown",
+                    "bundle":  "tsdown",
+                    "watch":  "tsdown --watch",
+                    "typecheck":  "tsc -b --pretty false",
+                    "test":  "vitest run",
+                    "prepare":  "tsdown"
+                },
+    "dependencies":  {
+                         "@deepseek-ai/dsh-ssh":  "file:../dsh-ssh"
+                     },
+    "peerDependencies":  {
+                             "@deepseek-ai/dsh-client-connection":  "^0.1.0-rc.6",
+                             "@deepseek-ai/dsh-client-locale":  "^0.1.0-rc.6",
+                             "@deepseek-ai/dsh-client-runtime":  "^0.1.0-rc.6",
+                             "@deepseek-ai/dsh-client-ui-settings":  "^0.1.0-rc.6",
+                             "@deepseek-ai/dsh-client-ui-sidebar":  "^0.1.0-rc.6",
+                             "@deepseek-ai/dsh-client-ui-slots":  "^0.1.0-rc.6",
+                             "@deepseek-ai/dsh-fs":  "^0.1.0-rc.6",
+                             "@deepseek-ai/dsh-fs-sandbox":  "^0.1.0-rc.6",
+                             "@deepseek-ai/dsh-host-webserver":  "^0.1.0-rc.6",
+                             "@deepseek-ai/dsh-subprocess":  "^0.1.0-rc.6",
+                             "@deepseek-ai/dsh-subprocess-local":  "^0.1.0-rc.6",
+                             "@deepseek-ai/dsh-system-prompt":  "^0.1.0-rc.6",
+                             "@deepseek-ai/dsh-timeout":  "^0.1.0-rc.6",
+                             "@deepseek-ai/dsh-tools":  "^0.1.0-rc.6",
+                             "react":  "^18.2.0",
+                             "react-dom":  "^18.2.0"
+                         },
+    "devDependencies":  {
+                            "@deepseek-ai/cordis":  "^4.0.1",
+                            "@deepseek-ai/dsh-client-connection":  "^0.1.0-rc.6",
+                            "@deepseek-ai/dsh-client-locale":  "^0.1.0-rc.6",
+                            "@deepseek-ai/dsh-client-runtime":  "^0.1.0-rc.6",
+                            "@deepseek-ai/dsh-client-ui-settings":  "^0.1.0-rc.6",
+                            "@deepseek-ai/dsh-client-ui-sidebar":  "^0.1.0-rc.6",
+                            "@deepseek-ai/dsh-client-ui-slots":  "^0.1.0-rc.6",
+                            "@deepseek-ai/dsh-client-ui-conversation":  "^0.1.0-rc.6",
+                            "@deepseek-ai/dsh-fs":  "^0.1.0-rc.6",
+                            "@deepseek-ai/dsh-fs-local":  "^0.1.0-rc.6",
+                            "@deepseek-ai/dsh-fs-sandbox":  "^0.1.0-rc.6",
+                            "@deepseek-ai/dsh-host-webserver":  "^0.1.0-rc.6",
+                            "@deepseek-ai/dsh-invariants":  "^0.1.0-rc.6",
+                            "@deepseek-ai/dsh-llm":  "^0.1.0-rc.6",
+                            "@deepseek-ai/dsh-sandbox":  "^0.1.0-rc.6",
+                            "@deepseek-ai/dsh-sandbox-policy":  "^0.1.0-rc.6",
+                            "@deepseek-ai/dsh-subprocess":  "^0.1.0-rc.6",
+                            "@deepseek-ai/dsh-subprocess-local":  "^0.1.0-rc.6",
+                            "@deepseek-ai/dsh-system-prompt":  "^0.1.0-rc.6",
+                            "@deepseek-ai/dsh-timeout":  "^0.1.0-rc.6",
+                            "@deepseek-ai/dsh-tools":  "^0.1.0-rc.6",
+                            "@types/node":  "^22.20.0",
+                            "@types/react":  "~18.3.1",
+                            "@types/react-dom":  "^18.3.5",
+                            "jsdom":  "^25.0.0",
+                            "react":  "^18.3.1",
+                            "react-dom":  "^18.3.1",
+                            "schemastery":  "^3.18.0",
+                            "tsdown":  "0.22.2",
+                            "typescript":  "~5.7.2",
+                            "vitest":  "^3.0.0"
+                        },
+    "files":  [
+                  "lib/*.js",
+                  "lib/types/**/*.d.ts",
+                  "src",
+                  "cordis.patch.yml",
+                  "README.md"
+              ],
+    "license":  "BSD-3-Clause"
 }
