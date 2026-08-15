@@ -133,6 +133,15 @@ export function createSettingsStore(): SettingsStore {
   return store
 }
 
+/** Module-level singleton: the panel wiring and the settings-section both
+ *  share ONE store instance, so toggles in the shell settings panel update the
+ *  live panel feature code (and vice versa) without a page reload. */
+let sharedSettingsStore: SettingsStore | null = null
+export function getSettingsStore(): SettingsStore {
+  if (sharedSettingsStore === null) sharedSettingsStore = createSettingsStore()
+  return sharedSettingsStore
+}
+
 /** Feature toggle ids (labels come from locales). */
 export const FEATURE_IDS: Array<keyof WorkspaceFeatures> = [
   'autoDiff', 'watchDots', 'gitBadges', 'syntaxHighlight',

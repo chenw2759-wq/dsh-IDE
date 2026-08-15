@@ -16,7 +16,7 @@ import { detectContentType, isTextType, tabIdOf } from './fileType.ts'
 import {
   evictPreviewScopes, readJson, readStoredNumber, writeJson, writeStoredNumber,
 } from './persist.ts'
-import { createSettingsStore, type SettingsStore } from './settings.ts'
+import { getSettingsStore, type SettingsStore } from './settings.ts'
 
 /**
  * Line-level diff of two texts (the Trae-style edit diff: deleted lines in
@@ -155,6 +155,18 @@ export function clampPreviewWidth(requested: number, available: number, explorer
   return Math.min(requested, maxByContainer)
 }
 
+/**
+ * Side-mode preview clamp (P1.2): the preview is its OWN grid track next to
+ * the explorer, so it may shrink to 0 (fully closed) and grow up to HALF the
+ * available row width. The chat (1fr center track) compresses as the preview
+ * grows — the floor below guarantees chat stays >= MIN_CHAT_PANEL_PX.
+ */
+export function clampSidePreviewWidth(requested: number, available: number, explorerWidth: number): number {
+  const half = Math.max(0, Math.floor(available / 2))
+  const byChat = Math.max(0, available - MIN_CHAT_PANEL_PX - explorerWidth - PREVIEW_REGION_CHROME_PX)
+  return Math.min(requested, half, byChat)
+}
+
 /** Layout panel state (project-scoped). */
 export interface LayoutState {
   /** The project root ('' when no project is bound). */
@@ -170,6 +182,9 @@ export interface LayoutState {
   /** Where the preview/editor region sits: below the tree, a side drawer, or
    *  a floating pane that overlays the chat area. */
   previewMode: PreviewLayoutMode
+  /** Floating-pane position (px, frame-relative) in float mode; null = the
+   *  default right-side slot. Persisted globally (`aionui-float-pos`). */
+  floatPos: { x: number; y: number } | null
   /** Measured available width of the [content | panels] row. */
   availableWidth: number
   /** True while a panel drag is in flight (disables transitions). */
@@ -177,6 +192,9 @@ export interface LayoutState {
   /** Integrated terminal: docked at the bottom fifth of the CHAT column. */
   terminalOpen: boolean
 }
+
+/** Storage key of the floating-pane position (global, JSON {x,y} or null). */
+export const KEY_FLOAT_POS = 'aionui-float-pos'
 
 /** The layout store plus its pure width math. */
 export interface LayoutStore extends StateHandle<LayoutState> {
@@ -190,6 +208,8 @@ export interface LayoutStore extends StateHandle<LayoutState> {
   cyclePreviewMode: () => void
   /** Set the preview mode explicitly. */
   setPreviewMode: (mode: 'bottom' | 'side' | 'float' | 'triple') => void
+  /** Move the floating pane (float mode); null restores the default slot. */
+  setFloatPos: (pos: { x: number; y: number } | null) => void
   /** Open / close the integrated terminal. */
   setTerminalOpen: (open: boolean) => void
 }
@@ -215,6 +235,7 @@ export function createLayoutStore(
     explorerCollapsed: false,
     previewOpen: false,
     previewMode: PREVIEW_MODES[readStoredNumber(KEY_PREVIEW_MODE, 0, PREVIEW_MODES.length - 1, 0)] ?? 'bottom',
+    floatPos: readFloatPos(),
     availableWidth: 0,
     dragging: false,
     terminalOpen: false,
@@ -226,7 +247,11 @@ export function createLayoutStore(
     previewWidthPx(state: LayoutState): number {
       if (!state.previewOpen) return 0
       const explorer = state.explorerCollapsed ? 0 : clampExplorerWidth(state.explorerWidth, state.availableWidth, true)
-      return clampPreviewWidth(state.previewWidth, state.availableWidth, explorer)
+      // Side mode: the preview is its OWN track next to the explorer, so it
+      // may shrink to 0 and grow up to half the row (compressing the chat).
+      return state.previewMode === 'side'
+        ? clampSidePreviewWidth(state.previewWidth, state.availableWidth, explorer)
+        : clampPreviewWidth(state.previewWidth, state.availableWidth, explorer)
     },
     shrinkToFit(state: LayoutState): void {
       if (state.availableWidth <= 0) return
@@ -235,7 +260,9 @@ export function createLayoutStore(
         writeStoredNumber(KEY_EXPLORER_WIDTH, explorer)
         handle.update((prev) => ({ ...prev, explorerWidth: explorer }))
       }
-      const preview = clampPreviewWidth(state.previewWidth, state.availableWidth, explorer)
+      const preview = state.previewMode === 'side'
+        ? clampSidePreviewWidth(state.previewWidth, state.availableWidth, explorer)
+        : clampPreviewWidth(state.previewWidth, state.availableWidth, explorer)
       if (state.previewOpen && state.previewWidth > preview) {
         writeStoredNumber(KEY_PREVIEW_WIDTH, preview)
         handle.update((prev) => ({ ...prev, previewWidth: preview }))
@@ -255,11 +282,32 @@ export function createLayoutStore(
       handle.update((prev) => (prev.previewMode === mode ? prev : { ...prev, previewMode: mode }))
       writeStoredNumber(KEY_PREVIEW_MODE, PREVIEW_MODES.indexOf(mode))
     },
+    setFloatPos(pos: { x: number; y: number } | null): void {
+      handle.update((prev) => (prev.floatPos === pos ? prev : { ...prev, floatPos: pos }))
+      try {
+        localStorage.setItem(KEY_FLOAT_POS, pos === null ? '' : JSON.stringify(pos))
+      } catch {
+        // best-effort
+      }
+    },
     setTerminalOpen(open: boolean): void {
       handle.update((prev) => (prev.terminalOpen === open ? prev : { ...prev, terminalOpen: open }))
     },
   })
   return store
+}
+
+/** Read the persisted floating-pane position ('' / absent = default slot). */
+function readFloatPos(): { x: number; y: number } | null {
+  try {
+    const raw = localStorage.getItem(KEY_FLOAT_POS)
+    if (raw === null || raw === '') return null
+    const parsed = JSON.parse(raw) as { x?: number; y?: number }
+    if (typeof parsed.x === 'number' && typeof parsed.y === 'number') return { x: parsed.x, y: parsed.y }
+    return null
+  } catch {
+    return null
+  }
 }
 
 /** Switch the layout to a project root (restores collapse + widths). */
@@ -1629,7 +1677,7 @@ export interface PanelStoresWithFlush extends PanelStores {
 
 /** Create the full store bundle. */
 export function createPanelStores(api: PanelApi): PanelStoresWithFlush {
-  const settings = createSettingsStore()
+  const settings = getSettingsStore()
   const layout = createLayoutStore(() => settings.getSnapshot())
   const explorer = createExplorerStore(api)
   const scm = createScmStore(api)

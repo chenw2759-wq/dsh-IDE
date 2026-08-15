@@ -30,10 +30,16 @@ import {
   MAX_WORKSPACE_PANEL_PX,
   MIN_WORKSPACE_PANEL_PX,
   KEY_EXPLORER_WIDTH,
+  KEY_FLOAT_POS,
+  KEY_PREVIEW_WIDTH,
   clampExplorerWidth,
+  clampSidePreviewWidth,
 } from './store.ts'
 import { readStoredNumber, writeStoredNumber } from './persist.ts'
 import type { LayoutStore } from './store.ts'
+
+/** Focus-rail width (P1.3): the collapsed file tree beside an open preview. */
+const RAIL_PX = 30
 
 /** The frame grid element (portals target it). */
 let frameElement: HTMLElement | null = null
@@ -112,6 +118,7 @@ export class PanelLayoutController {
   private widthHandle: HTMLDivElement | null = null
   private heightHandle: HTMLDivElement | null = null
   private floatingButton: HTMLButtonElement | null = null
+  private railButton: HTMLButtonElement | null = null
   private styleObserver: MutationObserver | null = null
   private sizeObserver: ResizeObserver | null = null
   private waitObserver: MutationObserver | null = null
@@ -197,6 +204,11 @@ export class PanelLayoutController {
     this.explorerCol = explorerCol
     this.previewCol = previewCol
 
+    // Free-drag the floating preview pane: any pointerdown landing on the
+    // tab-bar grab strip (marked data-aionui-float-drag) starts a position
+    // drag when the preview is in float mode.
+    previewCol.addEventListener('pointerdown', (event: PointerEvent) => this.startFloatDrag(event))
+
     // The integrated terminal host: docks over the BOTTOM FIFTH of the CHAT
     // column (the second grid child), never over the panels. The chat column
     // gets a matching bottom padding so the two never overlap.
@@ -239,6 +251,18 @@ export class PanelLayoutController {
     this.floatingButton.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg>'
     this.floatingButton.addEventListener('click', () => { this.toggleExplorer() })
     document.body.appendChild(this.floatingButton)
+
+    // P1.3 rail button: when the preview is open (side/triple) and the tree is
+    // collapsed, the explorer stays as a thin right rail (RAIL_PX) with a
+    // small expand tab — the focus mode. Fixed like the floating button, but
+    // positioned at the rail's center; the rail itself is the explorer track.
+    this.railButton = document.createElement('button')
+    this.railButton.type = 'button'
+    this.railButton.className = 'aionui-rail-expand'
+    this.railButton.setAttribute('aria-label', 'Expand explorer')
+    this.railButton.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg>'
+    this.railButton.addEventListener('click', () => { this.toggleExplorer() })
+    document.body.appendChild(this.railButton)
 
     // Sync the shell's inline grid: any shell write re-appends our track.
     const syncGrid = (): void => {
@@ -307,20 +331,36 @@ export class PanelLayoutController {
     this.applyGrid()
   }
 
-  /** Pointer drag on the width handle: the panel column width follows. */
+  /** Pointer drag on the width handle: the panel column width follows. In
+   *  SIDE mode (P1.2) the handle drags the PREVIEW width (0..½ row) — the
+   *  explorer keeps its own width and the chat compresses as the preview
+   *  grows. Everywhere else it drags the explorer width as before. */
   private startWidthDrag(event: PointerEvent): void {
     event.preventDefault()
+    const state = this.layout.getSnapshot()
+    const side = state.previewMode === 'side'
     const startX = event.clientX
-    const startWidth = this.layout.getSnapshot().explorerWidth
+    const startWidth = side ? state.previewWidth : state.explorerWidth
     const onMove = (moveEvent: PointerEvent): void => {
       const delta = moveEvent.clientX - startX
-      const width = Math.min(MAX_WORKSPACE_PANEL_PX, Math.max(MIN_WORKSPACE_PANEL_PX, startWidth - delta))
-      this.layout.update((prev) => ({ ...prev, explorerWidth: width }))
+      if (side) {
+        const explorer = state.explorerCollapsed ? 0 : clampExplorerWidth(state.explorerWidth, state.availableWidth, state.previewOpen)
+        const width = Math.max(0, Math.min(clampSidePreviewWidth(startWidth - delta, state.availableWidth, explorer), Math.floor(state.availableWidth / 2)))
+        this.layout.update((prev) => ({ ...prev, previewWidth: width }))
+      } else {
+        const width = Math.min(MAX_WORKSPACE_PANEL_PX, Math.max(MIN_WORKSPACE_PANEL_PX, startWidth - delta))
+        this.layout.update((prev) => ({ ...prev, explorerWidth: width }))
+      }
     }
     const onUp = (): void => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
-      writeStoredNumber(KEY_EXPLORER_WIDTH, this.layout.getSnapshot().explorerWidth)
+      const current = this.layout.getSnapshot()
+      if (side) {
+        writeStoredNumber(KEY_PREVIEW_WIDTH, current.previewWidth)
+      } else {
+        writeStoredNumber(KEY_EXPLORER_WIDTH, current.explorerWidth)
+      }
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
@@ -340,6 +380,58 @@ export class PanelLayoutController {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       writeStoredNumber(KEY_PREVIEW_HEIGHT, this.previewHeight)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
+  /** Free-drag the floating preview pane (float mode): the tab-bar strip is
+   *  the grab area. Position is clamped inside the frame; the store persists
+   *  it. Transitions are suspended while dragging so the pane follows the
+   *  pointer 1:1, then the 180ms glide re-engages for the settle. */
+  private startFloatDrag(event: PointerEvent): void {
+    const state = this.layout.getSnapshot()
+    if (state.previewMode !== 'float' || !state.previewOpen || this.previewCol === null || this.frame === null) return
+    const target = event.target as Element | null
+    if (target === null || !target.closest('[data-aionui-float-drag]')) return
+    // The tab bar also hosts buttons (mode toggle, collapse, tab close):
+    // never hijack a click on an interactive element — only the strip chrome
+    // (empty bar area / tab titles) starts a drag.
+    if (target.closest('button, [role="button"], input, a, [data-tab-id] [data-aionui-close]')) return
+    event.preventDefault()
+    const frameH = this.frame.clientHeight > 0 ? this.frame.clientHeight : this.frame.getBoundingClientRect().height
+    const floatH = Math.max(240, Math.min(Math.round(frameH * 0.6), 720))
+    const width = Math.round(state.previewWidth)
+    const startX = event.clientX
+    const startY = event.clientY
+    const pos = state.floatPos ?? { x: this.frame.getBoundingClientRect().width - Math.round(this.layout.explorerWidthPx(state)) - width - 12, y: Math.round((frameH - floatH) / 2) }
+    const startLeft = pos.x
+    const startTop = pos.y
+    const maxX = Math.max(8, Math.round(this.frameWidth - width - 8))
+    const maxY = Math.max(8, frameH - floatH - 8)
+    this.previewCol.dataset.aionuiFloatDragging = ''
+    this.previewCol.style.transition = 'none'
+    const onMove = (moveEvent: PointerEvent): void => {
+      const x = Math.min(Math.max(8, startLeft + (moveEvent.clientX - startX)), maxX)
+      const y = Math.min(Math.max(8, startTop + (moveEvent.clientY - startY)), maxY)
+      this.layout.update((prev) => (prev.floatPos !== null && prev.floatPos.x === x && prev.floatPos.y === y ? prev : { ...prev, floatPos: { x, y } }))
+      // Direct DOM write: applyGrid re-runs on the store update anyway, so
+      // just nudge it once per move for zero-latency dragging.
+      this.previewCol?.style.setProperty('left', `${x}px`)
+      this.previewCol?.style.setProperty('top', `${y}px`)
+    }
+    const onUp = (): void => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      if (this.previewCol !== null) {
+        delete this.previewCol.dataset.aionuiFloatDragging
+        this.previewCol.style.transition = 'left 180ms cubic-bezier(0.4, 0, 0.2, 1), top 180ms cubic-bezier(0.4, 0, 0.2, 1), width 180ms cubic-bezier(0.4, 0, 0.2, 1), height 180ms cubic-bezier(0.4, 0, 0.2, 1)'
+      }
+      try {
+        localStorage.setItem(KEY_FLOAT_POS, JSON.stringify(this.layout.getSnapshot().floatPos))
+      } catch {
+        // best-effort
+      }
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
@@ -401,12 +493,28 @@ export class PanelLayoutController {
     const floating = mode === 'float'
     const triple = mode === 'triple'
 
+    // P1.2: in SIDE mode the preview is its OWN grid track beside the tree —
+    // the panel column width becomes explorer + preview, so growing the
+    // preview compresses the chat (the 1fr center track), never overlaying it.
+    // Range: 0..½ of the available row (clamped; chat floor respected).
+    const sidePreviewPx = side && previewOpen ? this.layout.previewWidthPx(state) : 0
+
+    // P1.3 focus rail: with the preview open (side/triple), a collapsed tree
+    // becomes a thin right rail (RAIL_PX) with a small expand tab instead of
+    // vanishing to nothing — the rail is the explorer track's collapsed size.
+    const railActive = state.explorerCollapsed && previewOpen && (side || triple)
+    const explorerTrackPx = railActive
+      ? RAIL_PX
+      : state.explorerCollapsed
+        ? 0
+        : Math.round(panel)
+
     // Triple IDE layout: the panel column becomes TWO side-by-side columns —
     // the file tree (explorerWidth) and the preview (previewWidth) — so the
     // frame reads 对话 | 文件树 | 预览.
     const tripleWidth = triple && previewOpen
       ? Math.min(state.availableWidth > 0 ? state.availableWidth : 1200, Math.round(state.explorerWidth + state.previewWidth))
-      : panel
+      : Math.round(explorerTrackPx + sidePreviewPx)
 
     // Four tracks: shell sidebar, center, shell details, the panel column.
     frame.style.gridTemplateColumns =
@@ -420,9 +528,13 @@ export class PanelLayoutController {
       this.panelCol.style.flexDirection = (side || triple) ? 'row' : 'column'
     }
     if (this.explorerCol !== null) {
-      if (triple) {
+      if (triple || side) {
+        // Triple: file tree is its own fixed-width column beside the preview.
+        // Side (P1.2): the tree keeps its stored width; the preview track
+        // grows/shrinks next to it, compressing the chat. A collapsed tree
+        // shows as the P1.3 focus rail.
         this.explorerCol.style.flex = '0 0 auto'
-        this.explorerCol.style.width = `${Math.round(state.explorerWidth)}px`
+        this.explorerCol.style.width = `${explorerTrackPx}px`
         this.explorerCol.style.borderRight = '1px solid var(--aion-bg-3, #e5e6eb)'
       } else {
         this.explorerCol.style.flex = '1 1 0'
@@ -432,10 +544,16 @@ export class PanelLayoutController {
     }
     if (this.previewCol !== null) {
       if (triple) {
+        this.previewCol.classList.remove('aionui-float-pane')
         this.previewCol.style.position = ''
         this.previewCol.style.flex = '1 1 0'
         this.previewCol.style.width = ''
         this.previewCol.style.height = ''
+        this.previewCol.style.left = ''
+        this.previewCol.style.top = ''
+        this.previewCol.style.right = ''
+        this.previewCol.style.bottom = ''
+        this.previewCol.style.transition = ''
         this.previewCol.style.zIndex = ''
         this.previewCol.style.boxShadow = ''
         this.previewCol.style.borderTop = 'none'
@@ -443,22 +561,46 @@ export class PanelLayoutController {
         this.previewCol.style.visibility = 'visible'
       } else if (floating) {
         const width = previewOpen ? Math.round(state.previewWidth) : 0
-        // Detach from the grid column: position against the frame.
+        // Detach from the grid column: a freely draggable floating pane. The
+        // position comes from the store (persisted); null = the default slot
+        // (right edge, vertically centered-ish). The pane keeps a bounded
+        // height so dragging it around stays inside the frame.
+        const frameH = frame.clientHeight > 0 ? frame.clientHeight : frame.getBoundingClientRect().height
+        const floatH = Math.max(240, Math.min(Math.round(frameH * 0.6), 720))
+        const panelPx = Math.round(panel)
+        const defaultX = Math.max(8, Math.round(this.frameWidth - panelPx - width - 12))
+        const defaultY = Math.max(8, Math.round((frameH - floatH) / 2))
+        const pos = state.floatPos ?? { x: defaultX, y: defaultY }
+        const maxX = Math.max(8, Math.round(this.frameWidth - width - 8))
+        const maxY = Math.max(8, frameH - floatH - 8)
+        const x = Math.min(Math.max(8, Math.round(pos.x)), maxX)
+        const y = Math.min(Math.max(8, Math.round(pos.y)), maxY)
         this.previewCol.style.position = 'absolute'
-        this.previewCol.style.top = '0'
-        this.previewCol.style.bottom = '0'
-        this.previewCol.style.right = `${Math.round(panel)}px`
+        this.previewCol.style.left = `${x}px`
+        this.previewCol.style.top = `${y}px`
+        this.previewCol.style.right = ''
+        this.previewCol.style.bottom = ''
         this.previewCol.style.width = `${width}px`
-        this.previewCol.style.height = ''
+        this.previewCol.style.height = `${floatH}px`
         this.previewCol.style.flex = ''
         this.previewCol.style.zIndex = '25'
         this.previewCol.style.borderTop = 'none'
         this.previewCol.style.borderLeft = '1px solid var(--aion-bg-3, #e5e6eb)'
-        this.previewCol.style.boxShadow = '-8px 0 24px rgba(0, 0, 0, 0.25)'
+        this.previewCol.style.boxShadow = '-8px 0 24px rgba(0, 0, 0, 0.25), 0 8px 24px rgba(0, 0, 0, 0.18)'
         this.previewCol.style.visibility = width > 0 ? 'visible' : 'hidden'
+        // Animation: left/top/width/height glide when NOT actively dragging
+        // (the drag code sets transition: 'none' for the drag duration).
+        this.previewCol.style.transition = 'left 180ms cubic-bezier(0.4, 0, 0.2, 1), top 180ms cubic-bezier(0.4, 0, 0.2, 1), width 180ms cubic-bezier(0.4, 0, 0.2, 1), height 180ms cubic-bezier(0.4, 0, 0.2, 1)'
+        this.previewCol.classList.add('aionui-float-pane')
       } else if (side) {
-        const width = previewOpen ? Math.round(state.previewWidth) : 0
+        this.previewCol.classList.remove('aionui-float-pane')
+        const width = Math.round(sidePreviewPx)
         this.previewCol.style.position = ''
+        this.previewCol.style.left = ''
+        this.previewCol.style.top = ''
+        this.previewCol.style.right = ''
+        this.previewCol.style.bottom = ''
+        this.previewCol.style.transition = ''
         this.previewCol.style.width = `${width}px`
         this.previewCol.style.height = ''
         this.previewCol.style.flex = '0 0 auto'
@@ -468,8 +610,14 @@ export class PanelLayoutController {
         this.previewCol.style.borderLeft = '1px solid var(--aion-bg-3, #e5e6eb)'
         this.previewCol.style.visibility = width > 0 ? 'visible' : 'hidden'
       } else {
+        this.previewCol.classList.remove('aionui-float-pane')
         const height = previewOpen ? Math.round(this.previewHeight) : 0
         this.previewCol.style.position = ''
+        this.previewCol.style.left = ''
+        this.previewCol.style.top = ''
+        this.previewCol.style.right = ''
+        this.previewCol.style.bottom = ''
+        this.previewCol.style.transition = ''
         this.previewCol.style.height = `${height}px`
         this.previewCol.style.width = ''
         this.previewCol.style.flex = '0 0 auto'
@@ -492,10 +640,25 @@ export class PanelLayoutController {
       this.widthHandle.style.display = tripleWidth > 0 && state.root !== '' ? 'block' : 'none'
     }
 
-    // Floating expand button: visible only when the panel is collapsed.
+    // Floating expand button: visible only when the panel is collapsed OUTSIDE
+    // the focus-rail modes (bottom mode). The P1.3 rail button takes over when
+    // the collapsed tree shows as a right rail beside an open preview.
     if (this.floatingButton !== null) {
-      const show = state.root !== '' && state.explorerCollapsed
+      const show = state.root !== '' && state.explorerCollapsed && !railActive
       this.floatingButton.style.display = show ? 'flex' : 'none'
+    }
+
+    // P1.3 rail expand tab: sits vertically centered on the focus rail (the
+    // collapsed explorer track at the panel column's left edge). Fixed to the
+    // viewport because the rail is the last grid column.
+    if (this.railButton !== null) {
+      const frameW = this.frameWidth > 0 ? this.frameWidth : frame.getBoundingClientRect().width
+      if (railActive && state.root !== '') {
+        this.railButton.style.display = 'flex'
+        this.railButton.style.left = `${Math.max(0, Math.round(frameW - tripleWidth))}px`
+      } else {
+        this.railButton.style.display = 'none'
+      }
     }
 
     // Integrated terminal: docked at the bottom fifth of the chat column.
@@ -535,6 +698,7 @@ export class PanelLayoutController {
     this.panelCol?.remove()
     this.widthHandle?.remove()
     this.floatingButton?.remove()
+    this.railButton?.remove()
     if (this.instantTimer !== undefined) clearTimeout(this.instantTimer)
     if (frameElement === this.frame) frameElement = null
     this.frame = null

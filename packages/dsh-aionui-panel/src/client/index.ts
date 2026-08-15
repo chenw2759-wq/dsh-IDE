@@ -17,11 +17,16 @@
 import type { ClientContext, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+// Type-only: pulls the settings-surface SlotMap merge (the 'settings.section'
+// entry and the SettingsSectionOwnerProps contract) so this plugin can register
+// its workspace-settings page into the shell's bottom-left settings panel.
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { PanelApi, subscribePanelEvents } from './api.ts'
 import { PanelLayoutController } from './layout.ts'
 import { createPanelStores, layoutSetRoot } from './store.ts'
 import { readSettings } from './settings.ts'
 import { mountPanels } from './mount.tsx'
+import { SettingsSection } from './components/SettingsSection.tsx'
 import { NS, dictionaries, setLanguage, type AionUiPanelKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -37,12 +42,25 @@ interface SshWorkspaceModeLike {
   subscribe(listener: () => void): () => void
 }
 
-/** Required services: sessions for the project root, locale for the copy. */
-export const inject = ['sessions', 'locale']
+/** Required services: sessions for the project root, locale for the copy,
+ *  slots to register the workspace-settings page into the shell settings. */
+export const inject = ['sessions', 'locale', 'slots']
 
 /** Apply the browser half. */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, dictionaries), 'dsh-aionui-panel: dictionaries')
+
+  // The workspace-settings page lives in the SHELL's settings panel (bottom-
+  // left gear → a new "右边栏工作区" nav column). The section id "general"
+  // and "models" are taken by the shell; this one is ours.
+  const t = ctx.locale.bind(NS)
+  ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section',
+    id: 'aionui-workspace',
+    order: 20,
+    label: () => t('settings.title'),
+    locale: NS,
+  }, SettingsSection))
 
   ctx.effect(() => {
     const api = new PanelApi()

@@ -39,7 +39,6 @@ export function PreviewTabs({
   previewMode,
   onTogglePreviewMode,
   onMoveTab,
-  onOpenSettings,
 }: {
   tabs: PreviewTabState[]
   activeTabId: string | null
@@ -54,8 +53,6 @@ export function PreviewTabs({
   onTogglePreviewMode?: () => void
   /** Drag-reorder a tab onto another tab's position. */
   onMoveTab?: (id: string, targetId: string) => void
-  /** Open the right-side workspace settings. */
-  onOpenSettings?: () => void
 }): JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [fade, setFade] = useState<TabFadeState>({ left: false, right: false })
@@ -96,7 +93,7 @@ export function PreviewTabs({
   }, [activeTabId, tabs.length])
 
   return (
-    <div className={previewCss.tabBar}>
+    <div className={previewCss.tabBar} data-aionui-float-drag="">
       <div ref={scrollRef} className={previewCss.tabScroll}>
         {tabs.length === 0 && <div className={previewCss.noTabs}>{t('preview.noTabs')}</div>}
         {tabs.map((tab) => (
@@ -194,17 +191,6 @@ export function PreviewTabs({
             }
           >
             {previewMode === 'bottom' ? '⇊' : previewMode === 'side' ? '⇉' : previewMode === 'float' ? '⇱' : '⿻'}
-          </button>
-        )}
-        {onOpenSettings !== undefined && (
-          <button
-            type="button"
-            className={previewCss.panelCollapse}
-            onClick={onOpenSettings}
-            title={t('settings.open')}
-            aria-label={t('settings.open')}
-          >
-            ⚙
           </button>
         )}
         <div

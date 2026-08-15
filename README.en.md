@@ -19,6 +19,10 @@ bash / terminal execute transparently on the remote server** while the LLM and a
 
 ## Feature Overview
 
+### ⚙️ Right-side Workspace Settings (inside the system settings)
+
+"Settings" → "Right-side Workspace" manages the workspace's **feature toggles** (8: auto-diff / watch dots / Git badges / syntax highlight / zoom / triple-IDE / terminal dock / session isolation) and the **editor toolbar tools** (9, for rich-text editing), rendered as rounded cards with switches — changes apply immediately and persist.
+
 ### 🖼️ Markdown Preview (Three Layouts)
 
 Markdown files render directly in the panel (cyan tab), switchable between three layouts:
@@ -117,6 +121,8 @@ Log files (gray tab) preview directly in the panel.
 
 - Preview tabs can be **dragged to reorder**
 - Four layout modes cycle: bottom (⇊) / right drawer (⇉) / float (⇱) / **triple IDE (⿻)** — chat | files | preview side by side
+- **Free drag**: in the drawer layout, drag the preview column's width handle (0..½ of the row — the chat compresses, never overlays); in the float layout, grab the preview tab bar to move the floating pane anywhere (position remembered, 180ms glide animation)
+- **Focus rail**: with the preview open, collapse the file tree — it shrinks to a ~30px right rail with a small rounded expand tab; click it to expand back
 
 ### 🧬 R Language Support
 
