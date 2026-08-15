@@ -600,28 +600,39 @@ function ImageViewer({ src, meta }: { src: string; meta: string }): JSX.Element 
  */
 function Zoomable({ children }: { children: React.ReactNode }): JSX.Element {
   const [scale, setScale] = useState(1)
+  // Ref mirror of scale: fit() must never depend on the state (a scale
+  // dependency would re-run the mount effect on every zoom and override the
+  // user's manual scale — the auto-re-fit regression).
+  const scaleRef = useRef(1)
   const bodyRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
+
+  const applyScale = (next: number): void => {
+    const clamped = Math.round(Math.min(4, Math.max(0.25, next)) * 100) / 100
+    scaleRef.current = clamped
+    setScale(clamped)
+  }
 
   const fit = useCallback((): void => {
     const body = bodyRef.current
     const content = contentRef.current
     if (body === null || content === null) return
-    const natural = content.scrollWidth
-    if (natural <= 0) return
-    const fitScale = Math.max(0.25, Math.min(4, (body.clientWidth - 24) / natural))
-    setScale((s) => (Math.abs(s - fitScale) < 0.01 ? s : fitScale))
+    // Visual (post-transform) width — robust for both images and iframes.
+    const visualWidth = content.getBoundingClientRect().width
+    if (visualWidth <= 0) return
+    const fitScale = Math.max(0.25, Math.min(4, ((body.clientWidth - 24) / visualWidth) * scaleRef.current))
+    if (Math.abs(fitScale - scaleRef.current) >= 0.01) applyScale(fitScale)
   }, [])
 
   useEffect(() => {
-    // Fit once on mount only: a persistent ResizeObserver would re-fit when
-    // the scrollbars appear/disappear as the user zooms, overriding their
-    // manual scale. Manual zoom stays until the user clicks 适应 again.
+    // Fit once on mount only: a persistent observer would re-fit when the
+    // scrollbars appear/disappear as the user zooms, overriding their manual
+    // scale. Manual zoom stays until the user clicks 适应 again.
     fit()
   }, [fit])
 
   const zoomBy = (delta: number): void => {
-    setScale((s) => Math.round(Math.min(4, Math.max(0.25, s + delta)) * 100) / 100)
+    applyScale(scaleRef.current + delta)
   }
 
   return (
@@ -630,7 +641,7 @@ function Zoomable({ children }: { children: React.ReactNode }): JSX.Element {
         <button type="button" className={previewCss.zoomBtn} onClick={() => zoomBy(-0.25)} title={t('preview.zoomOut')}>−</button>
         <span className={previewCss.zoomPct}>{Math.round(scale * 100)}%</span>
         <button type="button" className={previewCss.zoomBtn} onClick={() => zoomBy(0.25)} title={t('preview.zoomIn')}>+</button>
-        <button type="button" className={previewCss.zoomBtn} onClick={() => setScale(1)} title={t('preview.zoomReset')}>1:1</button>
+        <button type="button" className={previewCss.zoomBtn} onClick={() => applyScale(1)} title={t('preview.zoomReset')}>1:1</button>
         <button type="button" className={previewCss.zoomBtn} onClick={fit} title={t('preview.zoomFit')}>{t('preview.zoomFitShort')}</button>
       </div>
       <div
@@ -642,7 +653,19 @@ function Zoomable({ children }: { children: React.ReactNode }): JSX.Element {
           zoomBy(event.deltaY < 0 ? 0.1 : -0.1)
         }}
       >
-        <div ref={contentRef} style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+        {/* Shrink the logical slot to 100%/scale so the transform renders at
+            full visual size: iframes keep their NATIVE scrollbars (a plain
+            scale() would blow the scrollbar up with the content), while
+            images scale pixel-perfect. */}
+        <div
+          ref={contentRef}
+          style={{
+            transform: `scale(${scale})`,
+            transformOrigin: 'top left',
+            width: `${100 / scale}%`,
+            height: `${100 / scale}%`,
+          }}
+        >
           {children}
         </div>
       </div>
