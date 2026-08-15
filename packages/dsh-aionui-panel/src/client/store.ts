@@ -370,20 +370,22 @@ function isNoisePath(rel: string): boolean {
  * Whether a changed path should AUTO-OPEN, given the per-directory watch
  * marks. Default watches only the FIRST level: files directly under the root
  * and files directly under a first-level directory. A marked directory
- * extends that: 'shallow' watches its direct children, 'deep' watches the
- * whole subtree. Noise paths never auto-open regardless of marks.
+ * extends that — and EXPLICIT marks override the noise defaults (a user who
+ * marks node_modules as deep really wants its files): 'shallow' watches its
+ * direct children, 'deep' watches the whole subtree. Unmarked noise paths
+ * never auto-open.
  */
 export function shouldAutoOpen(rel: string, watch: Record<string, 'shallow' | 'deep'>): boolean {
-  if (isNoisePath(rel)) return false
   const parts = rel.split('/').filter(Boolean)
-  if (parts.length <= 2) return true
+  // Explicit marks first: user intent wins over the noise/level defaults.
   for (let i = parts.length - 2; i >= 1; i -= 1) {
     const dir = parts.slice(0, i).join('/')
     const mark = watch[dir]
     if (mark === 'deep') return true
     if (mark === 'shallow' && i === parts.length - 1) return true
   }
-  return false
+  if (isNoisePath(rel)) return false
+  return parts.length <= 2
 }
 
 /** Create the explorer store (per-root persistence, debounced writes). */
