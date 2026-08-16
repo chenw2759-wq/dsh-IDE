@@ -8,10 +8,19 @@
 
 > [中文](README.md) | **English**
 
-Turn the DeepSeek Harness (DSH) Web GUI into an **all-in-one development environment**: a right-hand panel
-with a file tree, a line-numbered zebra-striped code editor, a command-line terminal, Trae-style edit
-diffs, type-colored tabs, and multi-format previews — an out-of-the-box JupyterLab-style workspace. It also
-ships with an **SSH remote workspace mode**: configure an SSH host (password / key, reusing
+Turn the DeepSeek Harness (DSH) Web GUI into an **all-in-one development environment** with four core
+capabilities:
+
+- 🖥️ **Right sidebar**: a dockable right-hand drawer — file tree + preview/editor in one pane; **drag a tab
+  out into a floating window, drag it back to the right edge to auto-dock** (bottom / right drawer / float /
+  triple-IDE)
+- 📄 **Preview**: Markdown / HTML / image / CSV / Office (docx / xlsx / pptx) / log rendered in place
+- ✏️ **Edit**: live code editing (syntax highlight + line numbers + zebra stripes) + Word-style visual
+  editing for Markdown/HTML + in-frame rich-text Office editing
+- 🧩 **IDE**: file tree, terminal, Trae-style red/green diffs, type-colored tabs, Git badges, watch paths —
+  an out-of-the-box JupyterLab-style workspace
+
+It also ships with an **SSH remote workspace mode**: configure an SSH host (password / key, reusing
 `~/.dsh/dsh-ssh.json`) from the top-right corner (left of the session log); once connected, the right
 panel switches to the remote file tree, and **the model's local read / write / edit / glob / grep and
 bash / terminal execute transparently on the remote server** while the LLM and agent loop stay local —
@@ -117,12 +126,15 @@ Log files (gray tab) preview directly in the panel.
 ![CSV Preview](docs/csv预览.png)
 ![HTML Preview](docs/html预览.png)
 
-### 🎚️ Drag-to-reorder Tabs + Triple-IDE Layout
+### 🖥️ Right Sidebar (dockable drawer · drag to detach / dock)
 
-- Preview tabs can be **dragged to reorder**
-- Four layout modes cycle: bottom (⇊) / right drawer (⇉) / float (⇱) / **triple IDE (⿻)** — chat | files | preview side by side
-- **Free drag**: in the drawer layout, drag the preview column's width handle (0..½ of the row — the chat compresses, never overlays); in the float layout, grab the preview tab bar to move the floating pane anywhere (position remembered, 180ms glide animation), **drag the bottom-right grip to resize width + height freely** (size remembered), snapping on release to preset positions — **far-right / cover the file tree (tree auto-collapses to a round button) / below the tree / chat-below** (drag out of a zone to free-float again)
-- **Focus rail**: with the preview open, collapse the file tree — it shrinks to a round floating button + a far-right drawer handle; the preview keeps its width (never collapses with the tree). Click the round button to toggle the floating file-tree popup; click the far-right handle to re-dock the drawer
+- **Right drawer (default)**: the preview docks in the right-hand column (file tree + preview in one drawer); four modes cycle — bottom (⇊) / **right drawer (⇉)** / float (⇱) / **triple IDE (⿻)** — chat | files | preview side by side
+- **Drag a tab out into a float**: in ANY layout, grab the preview **tab bar / toolbar empty area** and drag to pull the preview out into a floating window; it follows the pointer 1:1 with smooth, jank-free animation
+- **Drag to the right edge to dock back**: release the float flush against the screen's **right edge** to auto-dock back into the right drawer; release near "cover the file tree (tree auto-collapses to a round button) / below the tree / chat-below" to snap to that preset, or drag out of a zone to free-float again
+- **Resize the float**: drag the bottom-right grip to change width + height (size remembered, kept across snap)
+- **Focus rail**: with the preview open, collapse the file tree — it shrinks to a round floating button + a far-right drawer handle; the preview keeps its width. Click the round button to toggle the floating file-tree popup; click the far-right handle to re-dock the drawer
+
+![Markdown preview right drawer](docs/markdown预览-右栏.png)
 
 ### 🧬 R Language Support
 
@@ -154,6 +166,8 @@ survive saving. **HTML** edits the FULL document in a design-mode iframe (PPT-st
 / size / bold-italic / align / underline / highlight) — the original `<style>` and canvas background
 render as-is, and saving serializes the whole document (no more single-column body-fragment overlay).
 The toolbar provides bold / italic / underline / color / highlight / font / size / align / undo / redo. Text color and highlight are **Word-style buttons**: one click on the "A" applies the currently remembered color to the selection (a bar under the A shows the current color), and the small "▾" opens a palette where picking a swatch both remembers and applies it — no more multi-click color picking, and color can now be combined with bold/italic on the same selection.
+
+![Visual editing](docs/可视化编辑.png)
 
 ### 🚀 SSH Remote Development (Local Brain, Remote Hands)
 
@@ -191,8 +205,10 @@ the terminal execute transparently on the remote server.
 
 ## Quick Start
 
-- **Switch layout**: the "⇊ / ⇉ / ⇱" button on the preview tab bar cycles bottom pane / right pane /
-  floating overlay (wider).
+- **Switch layout**: the "⇊ / ⇉ / ⇱" button on the preview tab bar cycles bottom pane / right drawer
+  (default) / floating overlay (wider).
+- **Drag to detach / dock**: grab the tab bar or toolbar empty area to pull the preview out into a float;
+  drag it flush to the right edge and release to dock back into the right drawer.
 - **Edit files**: open `.py` / `.md` / `.js` etc. → type directly → Ctrl+S (mtime conflict check).
 - **Run code**: open `.py` / `.js` / `.sh` etc. → "▶ Run" in the toolbar (runs on the remote host in SSH mode).
 - **Open a terminal**: ">_ Terminal" in the preview toolbar, or the ">_" button on the file tab bar

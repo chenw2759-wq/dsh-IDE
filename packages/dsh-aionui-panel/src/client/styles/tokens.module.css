@@ -157,23 +157,23 @@
   border-top: 1px solid var(--aion-bg-3);
 }
 
-/* Floating preview pane: the tab-bar strip is the grab area (grab cursor);
-   while a drag is in flight the controller marks the pane so no transition
-   fights the pointer. touch-action:none + no text/image native drag are
-   critical: otherwise the BROWSER takes over the gesture (scroll / text
-   selection / HTML5 drag) and fires pointercancel, which kills the drag. */
-:global(.aionui-preview-col.aionui-float-pane [data-aionui-float-drag]) {
+/* Floating preview pane: the tab-bar strip + toolbar are the grab area (grab
+   cursor) in EVERY mode — in a docked drawer they pull the pane OUT into a
+   float, in float mode they drag it. touch-action:none + no text/image native
+   drag are critical: otherwise the BROWSER takes over the gesture (scroll /
+   text selection / HTML5 drag) and fires pointercancel, which kills the drag. */
+:global(.aionui-preview-col [data-aionui-float-drag]) {
   cursor: grab;
   touch-action: none;
   user-select: none;
   -webkit-user-drag: none;
 }
-:global(.aionui-preview-col.aionui-float-pane [data-aionui-float-drag] *),
-:global(.aionui-preview-col.aionui-float-pane [data-aionui-float-drag]) * {
+:global(.aionui-preview-col [data-aionui-float-drag] *),
+:global(.aionui-preview-col [data-aionui-float-drag]) * {
   user-select: none;
   -webkit-user-drag: none;
 }
-:global(.aionui-preview-col.aionui-float-pane [data-aionui-float-drag]:active) {
+:global(.aionui-preview-col [data-aionui-float-drag]:active) {
   cursor: grabbing;
 }
 :global(.aionui-preview-col[data-aionui-float-dragging]) {

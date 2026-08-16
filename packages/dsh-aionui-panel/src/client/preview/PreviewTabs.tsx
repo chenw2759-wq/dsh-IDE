@@ -38,7 +38,6 @@ export function PreviewTabs({
   onClosePanel,
   previewMode,
   onTogglePreviewMode,
-  onMoveTab,
 }: {
   tabs: PreviewTabState[]
   activeTabId: string | null
@@ -51,12 +50,9 @@ export function PreviewTabs({
   previewMode?: 'bottom' | 'side' | 'float' | 'triple'
   /** Toggle between the preview placements. */
   onTogglePreviewMode?: () => void
-  /** Drag-reorder a tab onto another tab's position. */
-  onMoveTab?: (id: string, targetId: string) => void
 }): JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [fade, setFade] = useState<TabFadeState>({ left: false, right: false })
-  const dragId = useRef<string | null>(null)
 
   // Overflow fades: ResizeObserver + scroll listener, setState only on change.
   useEffect(() => {
@@ -106,33 +102,9 @@ export function PreviewTabs({
             tabIndex={0}
             title={tab.path}
             aria-label={tab.title}
-            // In float mode the tab strip is the floating-pane drag handle
-            // (pointer gesture) — HTML5 tab-reordering must yield, otherwise
-            // the browser's native drag swallows pointermove and the pane
-            // never moves. Every other mode keeps tab drag-reorder.
-            draggable={onMoveTab !== undefined && previewMode !== 'float'}
-            onDragStart={(event) => {
-              if (previewMode === 'float') {
-                event.preventDefault()
-                return
-              }
-              dragId.current = tab.id
-              event.dataTransfer.effectAllowed = 'move'
-              try { event.dataTransfer.setData('text/plain', tab.id) } catch { /* some browsers throw on custom data */ }
-            }}
-            onDragEnd={() => { dragId.current = null }}
-            onDragOver={(event) => {
-              if (dragId.current === null || dragId.current === tab.id) return
-              event.preventDefault()
-              event.dataTransfer.dropEffect = 'move'
-            }}
-            onDrop={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              const source = dragId.current ?? (event.dataTransfer.getData('text/plain') || null)
-              if (source !== null && source !== tab.id) onMoveTab?.(source, tab.id)
-              dragId.current = null
-            }}
+            // No HTML5 drag-reorder: the tab strip is now the preview's drag
+            // handle in EVERY mode (pull-out-to-float / drag / dock-back), so a
+            // native drag would steal the pointer gesture (pointercancel bug).
             onClick={() => onSwitch(tab.id)}
             onKeyDown={activateOnKey(() => { onSwitch(tab.id) })}
             onContextMenu={(event) => onContextMenu(event, tab)}

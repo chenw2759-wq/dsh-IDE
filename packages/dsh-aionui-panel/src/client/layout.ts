@@ -30,8 +30,6 @@ import {
   MAX_WORKSPACE_PANEL_PX,
   MIN_WORKSPACE_PANEL_PX,
   KEY_EXPLORER_WIDTH,
-  KEY_FLOAT_POS,
-  KEY_FLOAT_SIZE,
   KEY_PREVIEW_WIDTH,
   KEY_TREE_POPUP_POS,
   clampExplorerWidth,
@@ -114,6 +112,11 @@ const KEY_PREVIEW_HEIGHT = 'aionui-preview-height-px'
  *  anchor is within this many px of the dragged pane's center. */
 const FLOAT_DOCK_SNAP_RADIUS = 120
 
+/** Dock-back threshold: when the floating pane's RIGHT EDGE is within this many
+ *  px of the frame's right edge on release, it docks back into the side
+ *  drawer (push-to-the-right = dock). This is the primary "铆定到右侧" gesture. */
+const FLOAT_DOCK_EDGE_PX = 48
+
 /** Float-dock geometry: frame-relative, top-left coordinates for the pane. */
 export interface FloatDockGeometry {
   frameW: number
@@ -155,10 +158,12 @@ export function floatDockAnchor(zone: string, g: FloatDockGeometry): { x: number
   }
 }
 
-/** Pick the nearest dock zone to a pane center (null when none is close). */
+/** Pick the nearest dock zone to a pane center (null when none is close).
+ *  `right` is intentionally NOT a snap target: the right edge is the dock-back
+ *  gesture (flush-right → side drawer), handled separately in startFloatDrag. */
 export function nearestFloatDock(cx: number, cy: number, g: FloatDockGeometry): { zone: string; x: number; y: number } | null {
   let best: { zone: string; x: number; y: number; d: number } | null = null
-  for (const zone of ['right', 'cover-tree', 'below-tree', 'chat'] as const) {
+  for (const zone of ['cover-tree', 'below-tree', 'chat'] as const) {
     const anchor = floatDockAnchor(zone, g)
     if (anchor === null) continue
     const ax = anchor.x + g.paneW / 2
@@ -513,16 +518,18 @@ export class PanelLayoutController {
     window.addEventListener('pointerup', onUp)
   }
 
-  /** Free-drag the floating preview pane (float mode): the tab-bar strip is
-   *  the grab area. Threshold gesture: pointerdown anywhere on the strip
-   *  (tabs included) records the origin; only after the pointer travels more
-   *  than DRAG_THRESHOLD_PX does the drag arm — so a plain click on a tab /
-   *  button still works. Position is clamped inside the frame; the store
-   *  persists it. Transitions are suspended while dragging so the pane follows
-   *  the pointer 1:1, then the 180ms glide re-engages for the settle. */
+  /** Drag the preview by its tab-bar strip in EVERY mode. Threshold gesture:
+   *  pointerdown anywhere on the strip records the origin; only after the
+   *  pointer travels more than DRAG_THRESHOLD_PX does the drag arm — a plain
+   *  click on a tab / button still works. In a docked mode (side/bottom/triple)
+   *  arming PULLS the pane OUT into a floating window (detach); in float mode it
+   *  drags the pane. On release: flush-right docks the pane back into the side
+   *  drawer; a near-by preset zone snaps it there; otherwise it free-floats.
+   *  During the drag ONLY the DOM is written (no store update per move) so the
+   *  pane follows the pointer 1:1 without React re-render jank. */
   private startFloatDrag(event: PointerEvent): void {
     const state = this.layout.getSnapshot()
-    if (state.previewMode !== 'float' || !state.previewOpen || this.previewCol === null || this.frame === null) return
+    if (!state.previewOpen || this.previewCol === null || this.frame === null) return
     const target = event.target as Element | null
     if (target === null || !target.closest('[data-aionui-float-drag]')) return
     // Real interactive controls (mode toggle, collapse, tab close glyph, url
@@ -533,35 +540,70 @@ export class PanelLayoutController {
     // historical "real browser drag never moves" bug.
     try { this.previewCol.setPointerCapture(event.pointerId) } catch { /* best-effort */ }
     event.preventDefault()
+
     const frame = this.frame
+    const frameW = this.frameWidth > 0 ? this.frameWidth : frame.getBoundingClientRect().width
     const frameH = frame.clientHeight > 0 ? frame.clientHeight : frame.getBoundingClientRect().height
-    const defaultH = Math.max(240, Math.min(Math.round(frameH * 0.6), 720))
-    const size = state.floatSize ?? { w: Math.round(state.previewWidth), h: defaultH }
-    const width = Math.round(size.w)
-    const floatH = Math.round(size.h)
+    const wasFloat = state.previewMode === 'float'
+
+    // Origin size + top-left of the pane for this drag.
+    let width: number
+    let floatH: number
+    let startLeft: number
+    let startTop: number
+    if (wasFloat) {
+      const defaultH = Math.max(240, Math.min(Math.round(frameH * 0.6), 720))
+      const size = state.floatSize ?? { w: Math.round(state.previewWidth), h: defaultH }
+      width = Math.round(size.w)
+      floatH = Math.round(size.h)
+      const sidebarPx = this.shellTracks.length >= 1 ? trackPx(this.shellTracks[0]) : 0
+      const explorerPx = state.explorerCollapsed ? 0 : clampExplorerWidth(state.explorerWidth, state.availableWidth, true)
+      const dockOrigin = state.floatDock !== null
+        ? floatDockAnchor(state.floatDock, { frameW, frameH, sidebarPx, explorerPx, paneW: width, paneH: floatH })
+        : null
+      const pos = dockOrigin ?? state.floatPos ?? { x: frame.getBoundingClientRect().width - Math.round(this.layout.explorerWidthPx(state)) - width - 12, y: Math.round((frameH - floatH) / 2) }
+      startLeft = pos.x
+      startTop = pos.y
+    } else {
+      // Detach: the pane's CURRENT rendered rect becomes the float's origin, so
+      // the "pull out" is seamless (no jump from the docked drawer to the float).
+      const pr = this.previewCol.getBoundingClientRect()
+      const fr = frame.getBoundingClientRect()
+      width = Math.max(240, Math.round(pr.width))
+      floatH = Math.max(160, Math.round(pr.height))
+      startLeft = Math.round(pr.left - fr.left)
+      startTop = Math.round(pr.top - fr.top)
+    }
+
     const startX = event.clientX
     const startY = event.clientY
-    // Origin = the pane's CURRENT rendered top-left (dock anchor when snapped,
-    // free position otherwise, default slot as fallback).
-    const sidebarPx = this.shellTracks.length >= 1 ? trackPx(this.shellTracks[0]) : 0
-    const explorerPx = state.explorerCollapsed ? 0 : clampExplorerWidth(state.explorerWidth, state.availableWidth, true)
-    const dockOrigin = state.floatDock !== null
-      ? floatDockAnchor(state.floatDock, { frameW: this.frameWidth, frameH, sidebarPx, explorerPx, paneW: width, paneH: floatH })
-      : null
-    const pos = dockOrigin ?? state.floatPos ?? { x: frame.getBoundingClientRect().width - Math.round(this.layout.explorerWidthPx(state)) - width - 12, y: Math.round((frameH - floatH) / 2) }
-    const startLeft = pos.x
-    const startTop = pos.y
-    const maxX = Math.max(8, Math.round(this.frameWidth - width - 8))
+    const maxX = Math.max(8, Math.round(frameW - width - 8))
     const maxY = Math.max(8, frameH - floatH - 8)
     let armed = false
+
     const onMove = (moveEvent: PointerEvent): void => {
       if (!armed) {
-        // Arm only after a real drag gesture (4px); a plain click on a tab
-        // or button never arms, so its onClick still fires.
         if (Math.abs(moveEvent.clientX - startX) < DRAG_THRESHOLD_PX && Math.abs(moveEvent.clientY - startY) < DRAG_THRESHOLD_PX) return
         armed = true
-        // Detach from any dock zone: a live drag is always free-floating.
-        if (this.layout.getSnapshot().floatDock !== null) this.layout.setFloatDock(null)
+        if (!wasFloat) {
+          // Pull out into float: adopt the docked rect as the float origin,
+          // then continue the drag 1:1 from where the pointer grabbed it.
+          this.layout.setFloatSize({ w: width, h: floatH })
+          this.layout.setFloatPos({ x: startLeft, y: startTop })
+          this.layout.setFloatDock(null)
+          this.layout.setPreviewMode('float')
+          // applyGrid has now rendered the float; re-read its actual rect so
+          // the drag continues from the exact rendered position.
+          const pr2 = this.previewCol !== null ? this.previewCol.getBoundingClientRect() : null
+          const fr2 = frame.getBoundingClientRect()
+          if (pr2 !== null) {
+            startLeft = Math.round(pr2.left - fr2.left)
+            startTop = Math.round(pr2.top - fr2.top)
+          }
+        } else if (this.layout.getSnapshot().floatDock !== null) {
+          // Detach from any float dock zone: a live drag is always free.
+          this.layout.setFloatDock(null)
+        }
         if (this.previewCol !== null) {
           this.previewCol.dataset.aionuiFloatDragging = ''
           this.previewCol.style.transition = 'none'
@@ -569,39 +611,55 @@ export class PanelLayoutController {
       }
       const x = Math.min(Math.max(8, startLeft + (moveEvent.clientX - startX)), maxX)
       const y = Math.min(Math.max(8, startTop + (moveEvent.clientY - startY)), maxY)
-      this.layout.update((prev) => (prev.floatPos !== null && prev.floatPos.x === x && prev.floatPos.y === y ? prev : { ...prev, floatPos: { x, y } }))
-      // Direct DOM write: applyGrid re-runs on the store update anyway, so
-      // just nudge it once per move for zero-latency dragging.
-      this.previewCol?.style.setProperty('left', `${x}px`)
-      this.previewCol?.style.setProperty('top', `${y}px`)
+      // DOM-only writes (no store update per move) — the pane follows the
+      // pointer 1:1 and the resize handle stays pinned to its corner.
+      if (this.previewCol !== null) {
+        this.previewCol.style.left = `${x}px`
+        this.previewCol.style.top = `${y}px`
+      }
+      if (this.floatResizeHandle !== null) {
+        this.floatResizeHandle.style.left = `${x + width - 11}px`
+        this.floatResizeHandle.style.top = `${y + floatH - 11}px`
+      }
     }
+
+    const settleTransition = (): void => {
+      if (this.previewCol !== null) {
+        delete this.previewCol.dataset.aionuiFloatDragging
+        this.previewCol.style.transition = 'left 180ms cubic-bezier(0.4, 0, 0.2, 1), top 180ms cubic-bezier(0.4, 0, 0.2, 1), width 180ms cubic-bezier(0.4, 0, 0.2, 1), height 180ms cubic-bezier(0.4, 0, 0.2, 1)'
+      }
+    }
+
     const onUp = (): void => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
-      if (armed && this.previewCol !== null) {
-        delete this.previewCol.dataset.aionuiFloatDragging
-        this.previewCol.style.transition = 'left 180ms cubic-bezier(0.4, 0, 0.2, 1), top 180ms cubic-bezier(0.4, 0, 0.2, 1), width 180ms cubic-bezier(0.4, 0, 0.2, 1), height 180ms cubic-bezier(0.4, 0, 0.2, 1)'
-      }
+      settleTransition()
       if (!armed) return
-      // Desktop-icon snapping: on release, dock to the nearest preset zone
-      // when its anchor is within the snap radius; otherwise free-float.
       const snapshot = this.layout.getSnapshot()
-      const frameW = this.frameWidth > 0 ? this.frameWidth : frame.getBoundingClientRect().width
+      const pr = this.previewCol !== null ? this.previewCol.getBoundingClientRect() : null
+      const fr = frame.getBoundingClientRect()
+      const x = pr !== null ? Math.round(pr.left - fr.left) : (snapshot.floatPos?.x ?? 8)
+      const y = pr !== null ? Math.round(pr.top - fr.top) : (snapshot.floatPos?.y ?? 8)
+
+      // Push-to-the-right = dock back into the side drawer.
+      if (frameW - (x + width) <= FLOAT_DOCK_EDGE_PX) {
+        this.layout.setFloatDock(null)
+        this.layout.setFloatPos({ x, y })
+        this.layout.setPreviewMode('side')
+        return
+      }
+
+      // Otherwise snap to a preset float zone, or free-float.
       const frameH2 = frame.clientHeight > 0 ? frame.clientHeight : frame.getBoundingClientRect().height
-      const defaultH2 = Math.max(240, Math.min(Math.round(frameH2 * 0.6), 720))
-      const size2 = snapshot.floatSize ?? { w: Math.round(snapshot.previewWidth), h: defaultH2 }
-      const paneW = Math.round(size2.w)
-      const floatH2 = Math.round(size2.h)
       const sidebarPx2 = this.shellTracks.length >= 1 ? trackPx(this.shellTracks[0]) : 0
       const explorerPx2 = snapshot.explorerCollapsed ? 0 : clampExplorerWidth(snapshot.explorerWidth, snapshot.availableWidth, true)
-      const pos = snapshot.floatPos
-      const cx = pos !== null ? pos.x + paneW / 2 : frameW / 2
-      const cy = pos !== null ? pos.y + floatH2 / 2 : frameH2 / 2
-      const snap = nearestFloatDock(cx, cy, { frameW, frameH: frameH2, sidebarPx: sidebarPx2, explorerPx: explorerPx2, paneW, paneH: floatH2 })
+      const cx = x + width / 2
+      const cy = y + floatH / 2
+      const snap = nearestFloatDock(cx, cy, { frameW, frameH: frameH2, sidebarPx: sidebarPx2, explorerPx: explorerPx2, paneW: width, paneH: floatH })
       if (snap !== null) {
         this.layout.setFloatPos({ x: snap.x, y: snap.y })
-        this.layout.setFloatDock(snap.zone as 'right' | 'cover-tree' | 'below-tree' | 'chat')
+        this.layout.setFloatDock(snap.zone as 'cover-tree' | 'below-tree' | 'chat')
         // "Cover the file tree" folds the tree into its round button.
         if (snap.zone === 'cover-tree' && !snapshot.explorerCollapsed) {
           this.layout.update((prev) => ({ ...prev, explorerCollapsed: true }))
@@ -612,24 +670,19 @@ export class PanelLayoutController {
           }
         }
       } else {
-        // Dragged out of a dock: free float at the current position.
+        // Free float at the current position.
         this.layout.setFloatDock(null)
-        try {
-          localStorage.setItem(KEY_FLOAT_POS, JSON.stringify(this.layout.getSnapshot().floatPos))
-        } catch {
-          // best-effort
-        }
+        this.layout.setFloatPos({ x, y })
       }
     }
+
     const onCancel = (): void => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
-      if (armed && this.previewCol !== null) {
-        delete this.previewCol.dataset.aionuiFloatDragging
-        this.previewCol.style.transition = 'left 180ms cubic-bezier(0.4, 0, 0.2, 1), top 180ms cubic-bezier(0.4, 0, 0.2, 1), width 180ms cubic-bezier(0.4, 0, 0.2, 1), height 180ms cubic-bezier(0.4, 0, 0.2, 1)'
-      }
+      settleTransition()
     }
+
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onCancel)
@@ -676,22 +729,28 @@ export class PanelLayoutController {
       if (w === lastW && h === lastH) return
       lastW = w
       lastH = h
-      this.layout.update((prev) => (prev.floatSize !== null && prev.floatSize.w === w && prev.floatSize.h === h ? prev : { ...prev, floatSize: { w, h } }))
-      // Direct DOM write for zero-latency resize; applyGrid re-runs too.
+      // DOM-only writes (no store update per move) so the resize follows the
+      // pointer 1:1 without React re-render jank; the store persists once on
+      // release below.
       if (this.previewCol !== null) {
         this.previewCol.style.width = `${w}px`
         this.previewCol.style.height = `${h}px`
+      }
+      if (this.floatResizeHandle !== null) {
+        const pr = this.previewCol !== null ? this.previewCol.getBoundingClientRect() : null
+        const fr = frame.getBoundingClientRect()
+        const left = pr !== null ? Math.round(pr.left - fr.left) : 8
+        const top = pr !== null ? Math.round(pr.top - fr.top) : 8
+        this.floatResizeHandle.style.left = `${left + w - 11}px`
+        this.floatResizeHandle.style.top = `${top + h - 11}px`
       }
     }
     const onUp = (): void => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
-      try {
-        localStorage.setItem(KEY_FLOAT_SIZE, JSON.stringify(this.layout.getSnapshot().floatSize))
-      } catch {
-        // best-effort
-      }
+      // Persist the final size once (single store write → single re-render).
+      this.layout.setFloatSize({ w: lastW, h: lastH })
     }
     const onCancel = (): void => {
       window.removeEventListener('pointermove', onMove)

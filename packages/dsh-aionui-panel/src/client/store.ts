@@ -264,7 +264,7 @@ export function createLayoutStore(
     previewWidth: readStoredNumber(KEY_PREVIEW_WIDTH, MIN_PREVIEW_PANEL_PX, MAX_PREVIEW_REGION_PX, DEFAULT_PREVIEW_REGION_PX),
     explorerCollapsed: false,
     previewOpen: false,
-    previewMode: PREVIEW_MODES[readStoredNumber(KEY_PREVIEW_MODE, 0, PREVIEW_MODES.length - 1, 0)] ?? 'bottom',
+    previewMode: PREVIEW_MODES[readStoredNumber(KEY_PREVIEW_MODE, 0, PREVIEW_MODES.length - 1, 1)] ?? 'side',
     floatPos: readFloatPos(),
     availableWidth: 0,
     dragging: false,
