@@ -31,6 +31,7 @@ import {
   MIN_WORKSPACE_PANEL_PX,
   KEY_EXPLORER_WIDTH,
   KEY_FLOAT_POS,
+  KEY_FLOAT_SIZE,
   KEY_PREVIEW_WIDTH,
   KEY_TREE_POPUP_POS,
   clampExplorerWidth,
@@ -181,6 +182,7 @@ export class PanelLayoutController {
   private chatCol: HTMLElement | null = null
   private widthHandle: HTMLDivElement | null = null
   private heightHandle: HTMLDivElement | null = null
+  private floatResizeHandle: HTMLDivElement | null = null
   private floatingButton: HTMLButtonElement | null = null
   private railButton: HTMLButtonElement | null = null
   private treePopup: HTMLDivElement | null = null
@@ -308,6 +310,21 @@ export class PanelLayoutController {
         this.applyGrid()
       })
     })
+
+    // The floating preview's resize handle (bottom-right corner, out of the
+    // grid flow). Only shown while the preview floats; dragging it changes the
+    // pane's width + height (user-resizable, persisted).
+    this.floatResizeHandle = document.createElement('div')
+    this.floatResizeHandle.className = 'aionui-float-resize-handle'
+    this.floatResizeHandle.style.position = 'absolute'
+    this.floatResizeHandle.style.zIndex = '26'
+    this.floatResizeHandle.style.cursor = 'nwse-resize'
+    this.floatResizeHandle.style.width = '18px'
+    this.floatResizeHandle.style.height = '18px'
+    this.floatResizeHandle.style.display = 'none'
+    this.floatResizeHandle.style.touchAction = 'none'
+    frame.appendChild(this.floatResizeHandle)
+    this.floatResizeHandle.addEventListener('pointerdown', (event: PointerEvent) => this.startFloatResize(event))
 
     // Two floating controls appear only while the tree is folded:
     // 1) a ROUND button (the folded tree's avatar) — click toggles the focus
@@ -513,8 +530,10 @@ export class PanelLayoutController {
     if (target.closest('button, input, a, [data-aionui-close]')) return
     const frame = this.frame
     const frameH = frame.clientHeight > 0 ? frame.clientHeight : frame.getBoundingClientRect().height
-    const floatH = Math.max(240, Math.min(Math.round(frameH * 0.6), 720))
-    const width = Math.round(state.previewWidth)
+    const defaultH = Math.max(240, Math.min(Math.round(frameH * 0.6), 720))
+    const size = state.floatSize ?? { w: Math.round(state.previewWidth), h: defaultH }
+    const width = Math.round(size.w)
+    const floatH = Math.round(size.h)
     const startX = event.clientX
     const startY = event.clientY
     // Origin = the pane's CURRENT rendered top-left (dock anchor when snapped,
@@ -564,8 +583,10 @@ export class PanelLayoutController {
       const snapshot = this.layout.getSnapshot()
       const frameW = this.frameWidth > 0 ? this.frameWidth : frame.getBoundingClientRect().width
       const frameH2 = frame.clientHeight > 0 ? frame.clientHeight : frame.getBoundingClientRect().height
-      const floatH2 = Math.max(240, Math.min(Math.round(frameH2 * 0.6), 720))
-      const paneW = Math.round(snapshot.previewWidth)
+      const defaultH2 = Math.max(240, Math.min(Math.round(frameH2 * 0.6), 720))
+      const size2 = snapshot.floatSize ?? { w: Math.round(snapshot.previewWidth), h: defaultH2 }
+      const paneW = Math.round(size2.w)
+      const floatH2 = Math.round(size2.h)
       const sidebarPx2 = this.shellTracks.length >= 1 ? trackPx(this.shellTracks[0]) : 0
       const explorerPx2 = snapshot.explorerCollapsed ? 0 : clampExplorerWidth(snapshot.explorerWidth, snapshot.availableWidth, true)
       const pos = snapshot.floatPos
@@ -592,6 +613,65 @@ export class PanelLayoutController {
         } catch {
           // best-effort
         }
+      }
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
+  /** Resize the floating preview by its bottom-right corner: width follows the
+   *  pointer's X, height follows Y, both clamped to sane bounds inside the
+   *  frame. The size is persisted so it survives reloads and dock snapping. */
+  private startFloatResize(event: PointerEvent): void {
+    const state = this.layout.getSnapshot()
+    if (state.previewMode !== 'float' || !state.previewOpen || this.previewCol === null || this.frame === null) return
+    event.preventDefault()
+    event.stopPropagation()
+    const frame = this.frame
+    const frameH = frame.clientHeight > 0 ? frame.clientHeight : frame.getBoundingClientRect().height
+    const startX = event.clientX
+    const startY = event.clientY
+    const startSize = state.floatSize ?? { w: Math.round(state.previewWidth), h: Math.max(240, Math.min(Math.round(frameH * 0.6), 720)) }
+    const startLeft = startSize.w
+    const startTop = startSize.h
+    // Pin the pane's CURRENT top-left as the free position before the first
+    // resize frame: applyGrid otherwise re-derives the default slot (hug-right
+    // / centered) from the changing size, which would slide the pane while the
+    // user only drags the corner. Clear any dock zone too (an explicit resize
+    // means the user now wants this exact size, not the preset).
+    if (state.floatDock !== null) this.layout.setFloatDock(null)
+    if (this.previewCol !== null) {
+      const pr = this.previewCol.getBoundingClientRect()
+      const fr = frame.getBoundingClientRect()
+      this.layout.setFloatPos({ x: Math.round(pr.left - fr.left), y: Math.round(pr.top - fr.top) })
+    }
+    // Minimum pane size and maximum (never larger than the frame minus margin).
+    const MIN_W = 240
+    const MIN_H = 160
+    const maxW = Math.max(MIN_W, Math.round(this.frameWidth - 16))
+    const maxH = Math.max(MIN_H, Math.round(frameH - 16))
+    let lastW = startLeft
+    let lastH = startTop
+    const onMove = (moveEvent: PointerEvent): void => {
+      const w = Math.min(maxW, Math.max(MIN_W, startLeft + (moveEvent.clientX - startX)))
+      const h = Math.min(maxH, Math.max(MIN_H, startTop + (moveEvent.clientY - startY)))
+      if (w === lastW && h === lastH) return
+      lastW = w
+      lastH = h
+      this.layout.update((prev) => (prev.floatSize !== null && prev.floatSize.w === w && prev.floatSize.h === h ? prev : { ...prev, floatSize: { w, h } }))
+      // Direct DOM write for zero-latency resize; applyGrid re-runs too.
+      if (this.previewCol !== null) {
+        this.previewCol.style.width = `${w}px`
+        this.previewCol.style.height = `${h}px`
+      }
+    }
+    const onUp = (): void => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      try {
+        localStorage.setItem(KEY_FLOAT_SIZE, JSON.stringify(this.layout.getSnapshot().floatSize))
+      } catch {
+        // best-effort
       }
     }
     window.addEventListener('pointermove', onMove)
@@ -768,13 +848,15 @@ export class PanelLayoutController {
         this.previewCol.style.borderLeft = '1px solid var(--aion-bg-3, #e5e6eb)'
         this.previewCol.style.visibility = 'visible'
       } else if (floating) {
-        const width = previewOpen ? Math.round(state.previewWidth) : 0
+        const frameH = frame.clientHeight > 0 ? frame.clientHeight : frame.getBoundingClientRect().height
+        const defaultH = Math.max(240, Math.min(Math.round(frameH * 0.6), 720))
+        const size = state.floatSize ?? { w: Math.round(state.previewWidth), h: defaultH }
+        const width = previewOpen ? Math.min(Math.round(size.w), Math.max(240, Math.round(this.frameWidth - 16))) : 0
+        const floatH = Math.min(Math.round(size.h), Math.max(160, Math.round(frameH - 16)))
         // Detach from the grid column: a freely draggable floating pane. The
         // position comes from the store (persisted); null = the default slot
         // (right edge, vertically centered-ish). The pane keeps a bounded
         // height so dragging it around stays inside the frame.
-        const frameH = frame.clientHeight > 0 ? frame.clientHeight : frame.getBoundingClientRect().height
-        const floatH = Math.max(240, Math.min(Math.round(frameH * 0.6), 720))
         const panelPx = Math.round(explorerPx)
         const sidebarPx = this.shellTracks.length >= 1 ? trackPx(this.shellTracks[0]) : 0
         const defaultX = Math.max(8, Math.round(this.frameWidth - panelPx - width - 12))
@@ -813,6 +895,12 @@ export class PanelLayoutController {
         // (the drag code sets transition: 'none' for the drag duration).
         this.previewCol.style.transition = 'left 180ms cubic-bezier(0.4, 0, 0.2, 1), top 180ms cubic-bezier(0.4, 0, 0.2, 1), width 180ms cubic-bezier(0.4, 0, 0.2, 1), height 180ms cubic-bezier(0.4, 0, 0.2, 1)'
         this.previewCol.classList.add('aionui-float-pane')
+        // The resize handle pins to the pane's bottom-right corner.
+        if (this.floatResizeHandle !== null) {
+          this.floatResizeHandle.style.display = width > 0 ? 'block' : 'none'
+          this.floatResizeHandle.style.left = `${x + width - 9}px`
+          this.floatResizeHandle.style.top = `${y + floatH - 9}px`
+        }
       } else if (side) {
         this.previewCol.classList.remove('aionui-float-pane')
         const width = Math.round(sidePreviewPx)
@@ -876,6 +964,12 @@ export class PanelLayoutController {
       const left = Math.round(width - tripleWidth)
       this.widthHandle.style.left = `${left}px`
       this.widthHandle.style.display = tripleWidth > 0 && state.root !== '' ? 'block' : 'none'
+    }
+
+    // The float resize handle shows only while the preview floats (its
+    // position is set inside the floating branch above).
+    if (this.floatResizeHandle !== null && !floating) {
+      this.floatResizeHandle.style.display = 'none'
     }
 
     // Two folded-tree controls (visible only while the tree is collapsed):
@@ -950,6 +1044,7 @@ export class PanelLayoutController {
     for (const dispose of this.disposers) dispose()
     this.panelCol?.remove()
     this.widthHandle?.remove()
+    this.floatResizeHandle?.remove()
     this.floatingButton?.remove()
     this.railButton?.remove()
     this.treePopup?.remove()

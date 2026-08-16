@@ -121,7 +121,7 @@ Log files (gray tab) preview directly in the panel.
 
 - Preview tabs can be **dragged to reorder**
 - Four layout modes cycle: bottom (⇊) / right drawer (⇉) / float (⇱) / **triple IDE (⿻)** — chat | files | preview side by side
-- **Free drag**: in the drawer layout, drag the preview column's width handle (0..½ of the row — the chat compresses, never overlays); in the float layout, grab the preview tab bar to move the floating pane anywhere (position remembered, 180ms glide animation), snapping on release to preset positions — **far-right / cover the file tree (tree auto-collapses to a round button) / below the tree / chat-below** (drag out of a zone to free-float again)
+- **Free drag**: in the drawer layout, drag the preview column's width handle (0..½ of the row — the chat compresses, never overlays); in the float layout, grab the preview tab bar to move the floating pane anywhere (position remembered, 180ms glide animation), **drag the bottom-right grip to resize width + height freely** (size remembered), snapping on release to preset positions — **far-right / cover the file tree (tree auto-collapses to a round button) / below the tree / chat-below** (drag out of a zone to free-float again)
 - **Focus rail**: with the preview open, collapse the file tree — it shrinks to a round floating button + a far-right drawer handle; the preview keeps its width (never collapses with the tree). Click the round button to toggle the floating file-tree popup; click the far-right handle to re-dock the drawer
 
 ### 🧬 R Language Support

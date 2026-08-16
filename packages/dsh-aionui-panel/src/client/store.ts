@@ -198,6 +198,10 @@ export interface LayoutState {
   /** Float-dock zone the floating preview is snapped to (desktop-icon style:
    *  far-right / cover-tree / below-tree / chat-below); null = free float. */
   floatDock: FloatDockZone | null
+  /** Floating-pane size (width × height, px) set by the user's resize drag;
+   *  null = the default (previewWidth × ~60% of the frame). Persisted
+   *  globally (`aionui-float-size`). */
+  floatSize: { w: number; h: number } | null
 }
 
 /** Storage key of the floating-pane position (global, JSON {x,y} or null). */
@@ -205,6 +209,9 @@ export const KEY_FLOAT_POS = 'aionui-float-pos'
 
 /** Storage key of the floating-pane dock zone (global, '' = free float). */
 export const KEY_FLOAT_DOCK = 'aionui-float-dock'
+
+/** Storage key of the floating-pane size (global, JSON {w,h} or null). */
+export const KEY_FLOAT_SIZE = 'aionui-float-size'
 
 /** Floating preview dock zones (desktop-icon style snapping). */
 export const FLOAT_DOCKS = ['right', 'cover-tree', 'below-tree', 'chat'] as const
@@ -229,6 +236,8 @@ export interface LayoutStore extends StateHandle<LayoutState> {
   setFloatPos: (pos: { x: number; y: number } | null) => void
   /** Snap the floating pane to a dock zone; null = free float. */
   setFloatDock: (dock: FloatDockZone | null) => void
+  /** Set the floating-pane size (user resize drag); null = default size. */
+  setFloatSize: (size: { w: number; h: number } | null) => void
   /** Open / close the integrated terminal. */
   setTerminalOpen: (open: boolean) => void
   /** Open / close the focus tree popup. */
@@ -262,6 +271,7 @@ export function createLayoutStore(
     terminalOpen: false,
     treePopupOpen: false,
     floatDock: readFloatDock(),
+    floatSize: readFloatSize(),
   })
   const store: LayoutStore = Object.assign(handle, {
     explorerWidthPx(state: LayoutState): number {
@@ -321,6 +331,14 @@ export function createLayoutStore(
         // best-effort
       }
     },
+    setFloatSize(size: { w: number; h: number } | null): void {
+      handle.update((prev) => (prev.floatSize === size ? prev : { ...prev, floatSize: size }))
+      try {
+        localStorage.setItem(KEY_FLOAT_SIZE, size === null ? '' : JSON.stringify(size))
+      } catch {
+        // best-effort
+      }
+    },
     setTerminalOpen(open: boolean): void {
       handle.update((prev) => (prev.terminalOpen === open ? prev : { ...prev, terminalOpen: open }))
     },
@@ -349,6 +367,21 @@ function readFloatDock(): FloatDockZone | null {
   try {
     const raw = localStorage.getItem(KEY_FLOAT_DOCK)
     return raw !== null && (FLOAT_DOCKS as readonly string[]).includes(raw) ? raw as FloatDockZone : null
+  } catch {
+    return null
+  }
+}
+
+/** Read the persisted floating-pane size ('' / absent / invalid = default). */
+function readFloatSize(): { w: number; h: number } | null {
+  try {
+    const raw = localStorage.getItem(KEY_FLOAT_SIZE)
+    if (raw === null || raw === '') return null
+    const parsed = JSON.parse(raw) as { w?: number; h?: number }
+    if (typeof parsed.w === 'number' && typeof parsed.h === 'number' && parsed.w > 0 && parsed.h > 0) {
+      return { w: parsed.w, h: parsed.h }
+    }
+    return null
   } catch {
     return null
   }

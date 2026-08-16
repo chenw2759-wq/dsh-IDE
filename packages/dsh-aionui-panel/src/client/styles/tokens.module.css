@@ -170,6 +170,32 @@
   transition: none !important;
 }
 
+/* Floating preview resize handle (bottom-right corner): a diagonal grip the
+   user drags to change the pane's width + height. */
+:global(.aionui-float-resize-handle) {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: transparent;
+}
+:global(.aionui-float-resize-handle::after) {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid var(--aion-bg-3);
+  border-bottom: 2px solid var(--aion-bg-3);
+  border-bottom-right-radius: 3px;
+  transition: border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+:global(.aionui-float-resize-handle:hover::after),
+:global(.aionui-float-resize-handle:active::after) {
+  border-color: var(--aion-brand);
+}
+
 /* The horizontal preview-height handle (hit zone + visual line). */
 :global(.aionui-preview-height-handle) {
   background: transparent;
