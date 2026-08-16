@@ -7,6 +7,8 @@
 ### 已完成（按实施阶段）
 
 **修复（视觉编辑 / Word 编辑 / 斑马纹 / 会话隔离）**
+- **集成终端空白修复**：终端面板改为从主 React 树用 `createPortal` 渲染进 `[data-aionui-terminal-host]`（此前用独立 React root 挂载，存在挂载竞态导致宿主只有黑底、面板内容不渲染）；宿主加不透明背景、提高 z-index。
+- **docx 预览渲染图片与底纹**：`w:drawing/a:blip` 内联图片现在经 `word/_rels/document.xml.rels` 解析并内联为 data URL `<img>`；`w:shd w:fill` 段落/文本底纹渲染为 `background-color`。图表、嵌入对象、页眉页脚等复杂结构暂未支持（已知限制）。
 - **Markdown 可视化编辑：下划线/字号/颜色保存后丢失 + 段落合并修复**。根因一：Office 编辑器的行距按钮会把 `styleWithCSS` 全局打开，泄漏到 Markdown 编辑器后，`execCommand('underline'/'fontSize'/'bold')` 产出 `<span style="text-decoration-line:underline|font-size:xxx-large|font-weight:bold">`，而清洗白名单只认 `<u>`/`<font>`/`color|background-color|font-size(px/pt)`，于是被整段丢弃（字号/下划线丢失、颜色时好时坏）。修复：Markdown/HTML 编辑器每次命令前先 `styleWithCSS=false` 强制产出规范标签。根因二：字号走 `<font size="1-7">` 旧标度（20px 被映射成 36pt），改为选中区包 `<span style="font-size:20px">` 精确字号。根因三：contenteditable 会把块级子元素嵌套进 `<div>`，`htmlToMarkdown` 只拍平顶层导致段落合并——现在递归拍平 `<div>`。
 - **docx 预览正确呈现不同字体（含中文字体）**：`runFont` 原来只读 `w:rFonts/w:ascii`（拉丁字体），中文 docx 的字体都写在 `w:eastAsia`（宋体/楷体/黑体…），所以预览里全是一个字体。现在同时读 `w:ascii`/`w:hAnsi`/`w:eastAsia`，按「拉丁字体 + 东亚字体」输出 `font-family:'Arial','宋体'`（拉丁字形走拉丁字体、汉字自动回退到东亚字体）；保存重建 `styleToRPr` 也补上 `w:rFonts`，编辑保存不再丢字体。
 - **工具栏高亮当前选区已有的格式（Word 式）**：编辑时把光标放到粗体/斜体/下划线/对齐/颜色/底色文字上，对应的按钮会**显示阴影高亮**（`queryCommandState` 查粗斜体下划线对齐；颜色/底色走 DOM 祖先链查显式 `color`/`background-color`，避免 `queryCommandValue` 返回默认色导致误亮）。md 可视化 / HTML iframe / Office 三编辑器一致。

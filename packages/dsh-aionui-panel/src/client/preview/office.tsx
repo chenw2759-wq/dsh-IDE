@@ -122,8 +122,90 @@ function runFont(run: Element): string[] {
   return fonts
 }
 
+/** The shading (w:shd w:fill) of an rPr/pPr element, as a CSS color. */
+function shadingFill(pr: Element | undefined): string | undefined {
+  if (pr === undefined) return undefined
+  const shd = Array.from(pr.children).find((c) => localName(c) === 'shd')
+  const val = shd?.getAttributeNS(W, 'fill') ?? shd?.getAttribute('w:fill') ?? undefined
+  return val !== undefined && val !== '' && val.toLowerCase() !== 'auto' ? `#${val}` : undefined
+}
+
+/** The shading of a run's rPr. */
+function runShading(run: Element): string | undefined {
+  const rPr = Array.from(run.children).find((c) => localName(c) === 'rPr')
+  return shadingFill(rPr)
+}
+
+/** The shading of a paragraph's pPr. */
+function paragraphShading(p: Element): string | undefined {
+  const pPr = Array.from(p.children).find((c) => localName(c) === 'pPr')
+  return shadingFill(pPr)
+}
+
+/** MIME type for a media file by its extension (image fallbacks). */
+function imageMime(target: string): string {
+  const ext = target.split('.').pop()?.toLowerCase() ?? ''
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg'
+  if (ext === 'gif') return 'image/gif'
+  if (ext === 'bmp') return 'image/bmp'
+  if (ext === 'webp') return 'image/webp'
+  if (ext === 'svg') return 'image/svg+xml'
+  return 'image/png'
+}
+
+/** Collect every r:embed id referenced by a drawing in the document. */
+function collectEmbedIds(xml: string): string[] {
+  const doc = new DOMParser().parseFromString(xml, 'application/xml')
+  const ids = new Set<string>()
+  for (const blip of allByLocal(doc.documentElement, 'blip')) {
+    const embed = blip.getAttributeNS(R, 'embed') ?? blip.getAttribute('r:embed')
+    if (embed !== null && embed !== '') ids.add(embed)
+  }
+  return [...ids]
+}
+
+/** Resolve every r:embed id to a data URL (async; empty map when no zip). */
+async function resolveImages(zip: JSZip | undefined, ids: string[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>()
+  if (zip === undefined || ids.length === 0) return map
+  let rels = new Map<string, string>()
+  const relsFile = zip.file('word/_rels/document.xml.rels')
+  if (relsFile !== null) {
+    const xml = await relsFile.async('string')
+    const doc = new DOMParser().parseFromString(xml, 'application/xml')
+    for (const rel of allByLocal(doc.documentElement, 'Relationship')) {
+      const id = rel.getAttribute('Id') ?? ''
+      const target = rel.getAttribute('Target') ?? ''
+      if (id !== '' && target !== '') rels.set(id, target)
+    }
+  }
+  await Promise.all(ids.map(async (id) => {
+    const target = rels.get(id)
+    if (target === undefined) return
+    const path = target.startsWith('/') ? target.slice(1) : `word/${target}`
+    const file = zip.file(path)
+    if (file === null) return
+    try {
+      const base64 = await file.async('base64')
+      map.set(id, `data:${imageMime(target)};base64,${base64}`)
+    } catch {
+      // best-effort
+    }
+  }))
+  return map
+}
+
 /** Render one docx run to an HTML string (formatting from rPr). */
-function renderRun(run: Element): string {
+function renderRun(run: Element, images: Map<string, string>): string {
+  // An inline drawing (image) inside a run.
+  const drawing = Array.from(run.children).find((c) => localName(c) === 'drawing')
+  if (drawing !== undefined) {
+    const blip = allByLocal(drawing, 'blip')[0]
+    const embed = blip?.getAttributeNS(R, 'embed') ?? blip?.getAttribute('r:embed') ?? undefined
+    const src = embed !== undefined ? images.get(embed) : undefined
+    if (src !== undefined) return `<img class="${previewCss.officeImage}" src="${src}" alt="" />`
+    return ''
+  }
   const text = runText(run)
   if (text === '') return ''
   const styles: string[] = []
@@ -139,6 +221,8 @@ function renderRun(run: Element): string {
   if (fonts.length > 0) styles.push(`font-family:${fonts.map((f) => `'${f.replace(/'/g, '')}'`).join(',')}`)
   const highlight = runHighlight(run)
   if (highlight !== undefined) styles.push(`background-color:${highlight}`)
+  const shading = runShading(run)
+  if (shading !== undefined) styles.push(`background-color:${shading}`)
   const style = styles.length > 0 ? ` style="${styles.join(';')}"` : ''
   return `<span${style}>${escapeHtml(text)}</span>`
 }
@@ -149,7 +233,7 @@ function escapeHtml(text: string): string {
 }
 
 /** Render one docx paragraph (w:p) to an HTML string. */
-function renderParagraph(p: Element): string {
+function renderParagraph(p: Element, images: Map<string, string>): string {
   const pPr = Array.from(p.children).find((c) => localName(c) === 'pPr')
   const style = pPr !== undefined ? Array.from(pPr.children).find((c) => localName(c) === 'pStyle') : undefined
   const styleVal = style?.getAttributeNS(W, 'val') ?? style?.getAttribute('w:val') ?? ''
@@ -158,33 +242,39 @@ function renderParagraph(p: Element): string {
   const body = Array.from(p.children)
     .filter((c) => localName(c) === 'r' || localName(c) === 'hyperlink' || localName(c) === 'ins')
     .flatMap((c) => {
-      if (localName(c) === 'r') return [renderRun(c)]
+      if (localName(c) === 'r') return [renderRun(c, images)]
       // hyperlink/ins: recurse runs
-      return Array.from(c.children).filter((cc) => localName(cc) === 'r').map((r) => renderRun(r))
+      return Array.from(c.children).filter((cc) => localName(cc) === 'r').map((r) => renderRun(r, images))
     })
     .join('')
-  const alignStyle = align === 'center' ? ' style="text-align:center"' : align === 'right' ? ' style="text-align:right"' : ''
+  const shading = paragraphShading(p)
+  const extra: string[] = []
+  if (align === 'center') extra.push('text-align:center')
+  else if (align === 'right') extra.push('text-align:right')
+  if (shading !== undefined) extra.push(`background-color:${shading}`)
+  const extraStyle = extra.length > 0 ? ` style="${extra.join(';')}"` : ''
   const heading = /^heading|^title/i.test(styleVal)
-    ? `<div class="${previewCss.officeHeading}"${alignStyle}>${body}</div>`
-    : `<div class="${previewCss.officePara}"${alignStyle}>${body}</div>`
+    ? `<div class="${previewCss.officeHeading}"${extraStyle}>${body}</div>`
+    : `<div class="${previewCss.officePara}"${extraStyle}>${body}</div>`
   return heading
 }
 
 /** Render a docx table (w:tbl) to an HTML string. */
-function renderTable(tbl: Element): string {
+function renderTable(tbl: Element, images: Map<string, string>): string {
   const rows = Array.from(tbl.children).filter((c) => localName(c) === 'tr')
   const html = rows.map((tr) => {
     const cells = Array.from(tr.children).filter((c) => localName(c) === 'tc')
     return `<tr>${cells.map((tc) => {
-      const paras = Array.from(tc.children).filter((c) => localName(c) === 'p').map((p) => renderParagraph(p))
+      const paras = Array.from(tc.children).filter((c) => localName(c) === 'p').map((p) => renderParagraph(p, images))
       return `<td>${paras.join('')}</td>`
     }).join('')}</tr>`
   }).join('')
   return `<table class="${previewCss.officeTable}">${html}</table>`
 }
 
-/** Parse docx into an HTML body string. */
-export function docxToHtml(xml: string): string {
+/** Parse docx into an HTML body string (zip used to inline images). */
+export async function docxToHtml(xml: string, zip?: JSZip): Promise<string> {
+  const images = await resolveImages(zip, collectEmbedIds(xml))
   const doc = new DOMParser().parseFromString(xml, 'application/xml')
   const root = doc.documentElement
   // The document element is w:document; its single child is w:body. Walk the
@@ -194,8 +284,8 @@ export function docxToHtml(xml: string): string {
   const blocks: string[] = []
   for (const child of Array.from(container.children)) {
     const name = localName(child)
-    if (name === 'p') blocks.push(renderParagraph(child))
-    else if (name === 'tbl') blocks.push(renderTable(child))
+    if (name === 'p') blocks.push(renderParagraph(child, images))
+    else if (name === 'tbl') blocks.push(renderTable(child, images))
   }
   return blocks.join('')
 }
@@ -269,7 +359,7 @@ export async function renderOffice(dataUrl: string, contentType: 'word' | 'excel
     const file = zip.file('word/document.xml')
     if (file === null) return '<div class="placeholder">not a docx package</div>'
     const xml = await file.async('string')
-    return docxToHtml(xml)
+    return docxToHtml(xml, zip)
   }
   if (contentType === 'excel') return xlsxToHtml(zip)
   return pptxToHtml(zip)

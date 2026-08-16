@@ -1232,6 +1232,13 @@ html[style*="color-scheme: light"] {
   min-height: 1.4em;
 }
 
+.officeImage {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+
 .officeHeading {
   margin: 14px 0 8px;
   font-weight: 700;

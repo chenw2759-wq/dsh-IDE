@@ -8,6 +8,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { JSX } from 'react'
 import { isEditableType } from '../fileType.ts'
 import { t, format } from '../locales.ts'
@@ -32,7 +33,24 @@ export function PreviewPanel({ stores }: { stores: PanelStores }): JSX.Element {
   const [viewMode, setViewMode] = useState<'source' | 'preview' | 'visual'>('preview')
   const [split, setSplit] = useState(false)
   const [terminal, setTerminal] = useState<{ open: boolean; command?: string }>({ open: false })
+  const [terminalHost, setTerminalHost] = useState<HTMLElement | null>(null)
   const lastDirtyCheck = useRef<Set<string>>(new Set())
+
+  // The docked terminal host is created by the layout controller on attach; find
+  // it (and re-find on re-attach) so the docked terminal renders via a portal
+  // from THIS React tree instead of a separate root (which was racing mount).
+  useEffect(() => {
+    const find = (): void => {
+      setTerminalHost((prev) => {
+        const next = document.querySelector<HTMLElement>('[data-aionui-terminal-host]')
+        return next === prev ? prev : next
+      })
+    }
+    find()
+    const observer = new MutationObserver(find)
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [])
 
   const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId) ?? null
 
@@ -241,6 +259,10 @@ export function PreviewPanel({ stores }: { stores: PanelStores }): JSX.Element {
           }}
           onCancel={() => setClosingIds(null)}
         />
+      )}
+      {layoutState.terminalOpen && terminalHost !== null && createPortal(
+        <TerminalPanel root={state.root} onClose={() => stores.layout.setTerminalOpen(false)} />,
+        terminalHost,
       )}
     </div>
   )
