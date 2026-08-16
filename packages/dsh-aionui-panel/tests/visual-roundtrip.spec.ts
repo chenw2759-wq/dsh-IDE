@@ -63,6 +63,17 @@ describe('htmlToMarkdown round-trip preserves visual formatting', () => {
     expect(md).toContain('## 标题')
     expect(md).toContain('<span style="color: #ff0000">红字</span>')
   })
+
+  it('round-trips an exact px font-size span', () => {
+    const md = htmlToMarkdown('<p>a<span style="font-size: 20px">b</span>c</p>')
+    expect(md).toContain('<span style="font-size: 20px">b</span>')
+    expect(renderMarkdown(md)).toContain('<span style="font-size: 20px">b</span>')
+  })
+
+  it('flattens <div>-nested block children so paragraphs never merge', () => {
+    const md = htmlToMarkdown('<div><p>第一段</p><p>第二段</p></div>')
+    expect(md).toContain('第一段\n\n第二段')
+  })
 })
 
 describe('matchInlineHtml boundary', () => {

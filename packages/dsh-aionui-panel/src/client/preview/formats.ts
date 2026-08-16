@@ -86,3 +86,25 @@ export function queryFormats(doc: Document): ActiveFormats {
     return EMPTY_FORMATS
   }
 }
+
+/** True when a fontSize value is an exact CSS size (px/pt/em/rem/%). */
+export function isExactSize(value: string): boolean {
+  return /^(?:\d+(?:\.\d+)?)(px|pt|em|rem|%)$/.test(value)
+}
+
+/** Wrap the selection in a span carrying the exact font size. The legacy
+ *  <font size="1-7"> scale (and Chrome's CSS keyword sizes) are lossy, so exact
+ *  px/pt sizes need a manual span wrap. */
+export function applyExactFontSize(doc: Document, value: string): void {
+  const sel = doc.getSelection()
+  if (sel === null || sel.rangeCount === 0 || sel.isCollapsed) return
+  const range = sel.getRangeAt(0)
+  const span = doc.createElement('span')
+  span.style.fontSize = value
+  span.appendChild(range.extractContents())
+  range.insertNode(span)
+  const reselect = doc.createRange()
+  reselect.selectNodeContents(span)
+  sel.removeAllRanges()
+  sel.addRange(reselect)
+}

@@ -25,7 +25,7 @@ import { readSettings } from '../settings.ts'
 import { t } from '../locales.ts'
 import previewCss from '../styles/preview.module.css'
 import { ColorButton } from './color-button.tsx'
-import { EMPTY_FORMATS, queryFormats, type ActiveFormats } from './formats.ts'
+import { applyExactFontSize, EMPTY_FORMATS, isExactSize, queryFormats, type ActiveFormats } from './formats.ts'
 
 const FONTS = ['宋体', '黑体', '仿宋', '楷体', 'Arial', 'Times New Roman', 'Microsoft YaHei', 'Courier New', 'sans-serif', 'serif']
 const SIZES = [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48]
@@ -86,7 +86,7 @@ export function OfficeToolbar({ exec, saveSelection, onSave, dirty, formats }: {
   }
   const applySize = (value: string): void => {
     setSize(value)
-    exec('fontSize', String(Math.max(1, Math.round(Number(value) / 3))))
+    exec('fontSize', `${value}pt`)
   }
   const applyMargin = (): void => {
     exec('styleWithCSS')
@@ -252,7 +252,11 @@ export function EditableOffice({ html, contentType, onEdited, onSave, dirty }: {
 
   const execWithSelection = (command: string, value?: string): void => {
     restoreSelection()
-    exec(command, value)
+    if (command === 'fontSize' && value !== undefined && isExactSize(value)) {
+      applyExactFontSize(document, value)
+    } else {
+      exec(command, value)
+    }
     if (ref.current !== null) onEdited(ref.current.innerHTML)
     // Re-sync the toolbar state immediately after the command.
     const sel = window.getSelection()

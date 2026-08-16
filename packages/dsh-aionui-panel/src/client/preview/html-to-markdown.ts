@@ -109,6 +109,11 @@ function block(el: Element): string {
     const bodyRows = rows.slice(1).map((tr) => parseRow(tr).join(' | '))
     return [header.join(' | '), sep, ...bodyRows].join('\n')
   }
+  // A <div> can nest block children (contenteditable restructures on some
+  // edits); flatten them so paragraphs never merge into one.
+  if (tag === 'div') {
+    return Array.from(el.children).map((c) => block(c)).filter((t) => t !== '').join('\n\n')
+  }
   // p / li / formatting element / anything else: plain paragraph content.
   return inline(el).trim()
 }

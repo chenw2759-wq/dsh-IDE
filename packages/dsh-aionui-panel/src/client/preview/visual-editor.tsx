@@ -32,7 +32,7 @@ import { t } from '../locales.ts'
 import previewCss from '../styles/preview.module.css'
 import { htmlToMarkdown } from './html-to-markdown.ts'
 import { ColorButton } from './color-button.tsx'
-import { EMPTY_FORMATS, queryFormats, type ActiveFormats } from './formats.ts'
+import { applyExactFontSize, EMPTY_FORMATS, isExactSize, queryFormats, type ActiveFormats } from './formats.ts'
 
 const FONTS = ['宋体', '黑体', '仿宋', '楷体', 'Arial', 'Times New Roman', 'Microsoft YaHei', 'sans-serif', 'serif']
 const SIZES = [12, 14, 16, 18, 20, 24, 28, 32, 40, 48]
@@ -80,7 +80,7 @@ function VisualToolbar({ exec, saveSelection, onSave, dirty, formats }: {
       {tools.fontSize && (
         <select className={previewCss.officeTool} value={size} title={t('settings.tool.fontSize')}
           onMouseDown={saveSelection}
-          onChange={(e) => { setSize(e.target.value); exec('fontSize', String(Math.max(1, Math.round(Number(e.target.value) / 3)))) }}>
+          onChange={(e) => { setSize(e.target.value); exec('fontSize', `${e.target.value}px`) }}>
           <option value="" disabled>{t('settings.tool.fontSize')}</option>
           {SIZES.map((s) => <option key={s} value={String(s)}>{s}px</option>)}
         </select>
@@ -179,7 +179,19 @@ export function VisualEditor({ html, contentType, onSave }: {
   const exec = (command: string, value?: string): void => {
     restoreSelection()
     try {
-      document.execCommand(command, false, value)
+      // Force non-CSS mode so execCommand emits canonical tags (<b>/<u>/<font>)
+      // that htmlToMarkdown round-trips. styleWithCSS leaks from the office
+      // editor's spacing buttons and otherwise turns underline into
+      // <span style="text-decoration-line: underline">, which the sanitizer
+      // drops — the "underline/size/color don't survive save" bug.
+      document.execCommand('styleWithCSS', false, 'false')
+      if (command === 'fontSize' && value !== undefined && isExactSize(value)) {
+        // Exact size: the legacy <font size="1-7"> scale is lossy, so wrap the
+        // selection in a span carrying the exact px/pt size instead.
+        applyExactFontSize(document, value)
+      } else {
+        document.execCommand(command, false, value)
+      }
     } catch {
       // best-effort
     }
@@ -276,7 +288,12 @@ function HtmlVisualEditor({ html, onSave }: { html: string; onSave: (editedHtml:
     restoreSelection()
     withDoc((doc) => {
       try {
-        doc.execCommand(command, false, value)
+        doc.execCommand('styleWithCSS', false, 'false')
+        if (command === 'fontSize' && value !== undefined && isExactSize(value)) {
+          applyExactFontSize(doc, value)
+        } else {
+          doc.execCommand(command, false, value)
+        }
       } catch {
         // best-effort
       }

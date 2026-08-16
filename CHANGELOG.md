@@ -7,6 +7,7 @@
 ### 已完成（按实施阶段）
 
 **修复（视觉编辑 / Word 编辑 / 斑马纹 / 会话隔离）**
+- **Markdown 可视化编辑：下划线/字号/颜色保存后丢失 + 段落合并修复**。根因一：Office 编辑器的行距按钮会把 `styleWithCSS` 全局打开，泄漏到 Markdown 编辑器后，`execCommand('underline'/'fontSize'/'bold')` 产出 `<span style="text-decoration-line:underline|font-size:xxx-large|font-weight:bold">`，而清洗白名单只认 `<u>`/`<font>`/`color|background-color|font-size(px/pt)`，于是被整段丢弃（字号/下划线丢失、颜色时好时坏）。修复：Markdown/HTML 编辑器每次命令前先 `styleWithCSS=false` 强制产出规范标签。根因二：字号走 `<font size="1-7">` 旧标度（20px 被映射成 36pt），改为选中区包 `<span style="font-size:20px">` 精确字号。根因三：contenteditable 会把块级子元素嵌套进 `<div>`，`htmlToMarkdown` 只拍平顶层导致段落合并——现在递归拍平 `<div>`。
 - **docx 预览正确呈现不同字体（含中文字体）**：`runFont` 原来只读 `w:rFonts/w:ascii`（拉丁字体），中文 docx 的字体都写在 `w:eastAsia`（宋体/楷体/黑体…），所以预览里全是一个字体。现在同时读 `w:ascii`/`w:hAnsi`/`w:eastAsia`，按「拉丁字体 + 东亚字体」输出 `font-family:'Arial','宋体'`（拉丁字形走拉丁字体、汉字自动回退到东亚字体）；保存重建 `styleToRPr` 也补上 `w:rFonts`，编辑保存不再丢字体。
 - **工具栏高亮当前选区已有的格式（Word 式）**：编辑时把光标放到粗体/斜体/下划线/对齐/颜色/底色文字上，对应的按钮会**显示阴影高亮**（`queryCommandState` 查粗斜体下划线对齐；颜色/底色走 DOM 祖先链查显式 `color`/`background-color`，避免 `queryCommandValue` 返回默认色导致误亮）。md 可视化 / HTML iframe / Office 三编辑器一致。
 - **可视化编辑的格式命令不再丢失**：工具栏的 `<select>`/`<input type=color>` 会抢焦点，导致 `execCommand('foreColor'/'fontSize'/…)` 在空选区上执行（颜色看着像「刷背景」、字号粗斜体不生效）。现在每个工具在 `onMouseDown` 先快照选区、执行前恢复选区，且格式命令立即置脏（保存按钮马上可用）。
