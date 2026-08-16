@@ -407,7 +407,8 @@ function blockText(element: Element): string {
 function styleToRPr(style: string): string {
   const parts: string[] = []
   const match = (prop: string): string | undefined => {
-    const re = new RegExp(`${prop}\\s*:\\s*([^;]+)`)
+    // Anchor at start or after ';' so `color` never matches `background-color`.
+    const re = new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([^;]+)`)
     const m = style.match(re)
     return m !== null ? m[1].trim() : undefined
   }
@@ -464,34 +465,29 @@ export async function rebuildDocx(zip: JSZip, editedHtml: string): Promise<Uint8
       paragraphs.push(`<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>${rows}</w:tbl>`)
       continue
     }
-    // Paragraph: iterate inline spans for run formatting.
+    // Paragraph: iterate inline spans for run formatting. Each element's OWN
+    // style wraps its direct text children; nested elements inherit unless they
+    // carry their own style (the parser emits flat spans, so this stays simple).
     const runs: string[] = []
-    const walk = (node: Node): void => {
+    const walk = (node: Node, inheritedRPr: string): void => {
       if (node.nodeType === Node.TEXT_NODE) {
         const text = node.textContent ?? ''
-        if (text !== '') runs.push(`<w:r><w:t>${xmlEscape(text)}</w:t></w:r>`)
+        if (text !== '') runs.push(`<w:r>${inheritedRPr}<w:t>${xmlEscape(text)}</w:t></w:r>`)
         return
       }
       const el = node as Element
-      const style = el.getAttribute('style') ?? ''
-      const rPr = styleToRPr(style)
-      if (el.childNodes.length === 0) {
-        const text = (el.textContent ?? '').trim()
-        if (text !== '') runs.push(`<w:r>${rPr}<w:t>${xmlEscape(text)}</w:t></w:r>`)
-        return
-      }
+      const ownRPr = styleToRPr(el.getAttribute('style') ?? '')
+      const rPr = ownRPr !== '' ? ownRPr : inheritedRPr
       for (const childNode of Array.from(el.childNodes)) {
-        const childEl = childNode as Element
-        const childStyle = childEl.getAttribute?.('style') ?? ''
-        if (childNode.nodeType === Node.ELEMENT_NODE && childStyle !== '') {
-          const text = blockText(childEl)
-          if (text !== '') runs.push(`<w:r>${styleToRPr(childStyle)}<w:t>${xmlEscape(text)}</w:t></w:r>`)
+        if (childNode.nodeType === Node.TEXT_NODE) {
+          const text = childNode.textContent ?? ''
+          if (text.trim() !== '') runs.push(`<w:r>${rPr}<w:t>${xmlEscape(text)}</w:t></w:r>`)
         } else {
-          walk(childNode)
+          walk(childNode, rPr)
         }
       }
     }
-    for (const node of Array.from(child.childNodes)) walk(node)
+    for (const node of Array.from(child.childNodes)) walk(node, '')
     const isHeading = cls.includes('officeHeading')
     const pPr = isHeading ? '<w:pPr><w:pStyle w:val="Heading1"/></w:pPr>' : ''
     paragraphs.push(`<w:p>${pPr}${runs.join('')}</w:p>`)
