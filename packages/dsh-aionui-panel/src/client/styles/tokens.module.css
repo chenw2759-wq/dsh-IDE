@@ -131,12 +131,11 @@
 }
 
 /* Integrated terminal host (docked at the chat column bottom). A solid
-   background + column flex keeps the panel opaque and fills the host even if
-   the React child is late to mount — the "blank page below the chat" bug. */
+   background keeps the panel opaque even if the React child is late to mount —
+   the "blank page below the chat" bug. */
 :global([data-aionui-terminal-host]) {
   background: #0d0f12;
-  overflow: hidden;
-  flex-direction: column;
+  z-index: 50;
 }
 
 /* The right panel column: one grid item, split into explorer (top) and

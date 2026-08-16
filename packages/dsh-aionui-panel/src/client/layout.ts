@@ -288,7 +288,7 @@ export class PanelLayoutController {
     const terminalHost = document.createElement('div')
     terminalHost.dataset.aionuiTerminalHost = ''
     terminalHost.style.position = 'absolute'
-    terminalHost.style.zIndex = '26'
+    terminalHost.style.zIndex = '50'
     terminalHost.style.display = 'none'
     frame.appendChild(terminalHost)
     this.terminalHost = terminalHost
