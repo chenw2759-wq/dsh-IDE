@@ -19,10 +19,12 @@ import { t } from '../locales.ts'
 import { useStore } from '../hooks/useStore.ts'
 import type { PanelStores } from '../store.ts'
 import { FileTypeIcon } from './FileIcon.tsx'
-import { ChevronRightIcon, CloseIcon, ExpandRightIcon, SearchIcon } from './icons.tsx'
+import { ChevronRightIcon, CloseIcon, ExpandRightIcon, PlusIcon, SearchIcon } from './icons.tsx'
 import { ScmPanel } from './ScmPanel.tsx'
 import { activateOnKey } from './a11y.ts'
 import { FileContextMenu, type FileMenuState } from './FileContextMenu.tsx'
+import { ContextMenu, type MenuState } from './overlay.tsx'
+import { createFileAction, createFolderAction } from './fs-actions.ts'
 import explorerCss from '../styles/explorer.module.css'
 import '../styles/tokens.module.css'
 
@@ -54,6 +56,7 @@ export function ExplorerPanel({
   const settings = useStore(stores.settings)
   const [searchFocus, setSearchFocus] = useState(false)
   const [fileMenu, setFileMenu] = useState<FileMenuState | null>(null)
+  const [newMenu, setNewMenu] = useState<MenuState | null>(null)
   const [renaming, setRenaming] = useState<RenameState | null>(null)
   const root = state.root
   const terminalOpen = layoutState.terminalOpen
@@ -66,6 +69,10 @@ export function ExplorerPanel({
 
   const startRename = (path: string, isDir: boolean): void => {
     setRenaming({ path, isDir })
+  }
+
+  const refreshAfterCreate = (): void => {
+    void stores.explorer.handleFsChange()
   }
 
   return (
@@ -96,6 +103,25 @@ export function ExplorerPanel({
             &gt;_
           </button>
         )}
+        <button
+          type="button"
+          className={explorerCss.tabBtn}
+          onClick={(event) => {
+            const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+            setNewMenu({
+              x: rect.left,
+              y: rect.bottom + 4,
+              entries: [
+                { key: 'new-file', label: t('explorer.menuNewFile'), onSelect: () => createFileAction(stores.api, root, '', refreshAfterCreate) },
+                { key: 'new-folder', label: t('explorer.menuNewFolder'), onSelect: () => createFolderAction(stores.api, root, '', refreshAfterCreate) },
+              ],
+            })
+          }}
+          title={t('explorer.menuNewFile') + ' / ' + t('explorer.menuNewFolder')}
+          aria-label={t('explorer.menuNewFile') + ' / ' + t('explorer.menuNewFolder')}
+        >
+          <PlusIcon size={14} />
+        </button>
         <span
           className={explorerCss.watchHelp}
           title={t('explorer.watchHelp')}
@@ -136,6 +162,8 @@ export function ExplorerPanel({
           onRenameInline={startRename}
         />
       )}
+
+      <ContextMenu state={newMenu} onClose={() => setNewMenu(null)} />
     </div>
   )
 }

@@ -153,20 +153,20 @@ export function FileContextMenu({
   return (
     <div ref={ref} className={explorerCss.contextMenu} style={style}>
       <button type="button" className={explorerCss.contextItem} onClick={createFile}>
-        📄 {t('explorer.menuNewFile')}
+        {t('explorer.menuNewFile')}
       </button>
       <button type="button" className={explorerCss.contextItem} onClick={createFolder}>
-        📁 {t('explorer.menuNewFolder')}
+        {t('explorer.menuNewFolder')}
       </button>
       <div className={explorerCss.contextSep} />
       <button type="button" className={explorerCss.contextItem} onClick={() => void download()} disabled={menu.isDir || menu.path === ''}>
-        ⬇ {t('explorer.menuDownload')}
+        {t('explorer.menuDownload')}
       </button>
       <button type="button" className={explorerCss.contextItem} onClick={rename} disabled={menu.path === ''}>
-        ✎ {t('explorer.menuRename')}
+        {t('explorer.menuRename')}
       </button>
       <button type="button" className={explorerCss.contextItem} onClick={copy} disabled={menu.path === ''}>
-        ⎘ {t('explorer.menuCopy')}
+        {t('explorer.menuCopy')}
       </button>
       <button
         type="button"
@@ -174,11 +174,11 @@ export function FileContextMenu({
         onClick={paste}
         disabled={clipboard === null || clipboard.root !== root}
       >
-        ⎙ {t('explorer.menuPaste')}
+        {t('explorer.menuPaste')}
       </button>
       <div className={explorerCss.contextSep} />
       <button type="button" className={`${explorerCss.contextItem} ${explorerCss.contextDanger}`} onClick={remove} disabled={menu.path === ''}>
-        🗑 {t('common.delete')}
+        {t('common.delete')}
       </button>
     </div>
   )

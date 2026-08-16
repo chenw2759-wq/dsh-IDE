@@ -14,6 +14,7 @@ import { t, format } from '../locales.ts'
 import { useStore } from '../hooks/useStore.ts'
 import type { PanelStores, PreviewTabState } from '../store.ts'
 import { ConfirmDialog, ContextMenu, type MenuState } from '../components/overlay.tsx'
+import { createFileAction, createFolderAction, viewPathAction } from '../components/fs-actions.ts'
 import { PreviewTabs } from './PreviewTabs.tsx'
 import { PreviewToolbar, downloadTab } from './PreviewToolbar.tsx'
 import { TabContent } from './content.tsx'
@@ -26,6 +27,7 @@ export function PreviewPanel({ stores }: { stores: PanelStores }): JSX.Element {
   const state = useStore(preview)
   const layoutState = useStore(stores.layout)
   const [menu, setMenu] = useState<MenuState | null>(null)
+  const [blankMenu, setBlankMenu] = useState<MenuState | null>(null)
   const [closingIds, setClosingIds] = useState<string[] | null>(null)
   const [viewMode, setViewMode] = useState<'source' | 'preview' | 'visual'>('preview')
   const [split, setSplit] = useState(false)
@@ -131,8 +133,33 @@ export function PreviewPanel({ stores }: { stores: PanelStores }): JSX.Element {
     preview.update((prev) => ({ ...prev, open: true, tabs: [...prev.tabs, tab], activeTabId: tab.id }))
   }
 
+  /** Re-list the tree after a create from the preview blank-area menu. */
+  const refreshAfterCreate = (): void => {
+    void stores.explorer.handleFsChange()
+  }
+
   return (
-    <div className={`aionui-root ${previewCss.panel}`}>
+    <div
+      className={`aionui-root ${previewCss.panel}`}
+      onContextMenu={(event) => {
+        // Only the EMPTY area: interactive controls (tabs, toolbar, content)
+        // keep their own handlers.
+        const target = event.target as Element
+        if (target.closest('[data-tab-id], button, input, a, textarea, select, iframe, [contenteditable="true"], [contenteditable], [class*=tabBar]')) return
+        event.preventDefault()
+        const root = state.root
+        setBlankMenu({
+          x: event.clientX,
+          y: event.clientY,
+          entries: [
+            { key: 'new-file', label: t('explorer.menuNewFile'), onSelect: () => createFileAction(stores.api, root, '', refreshAfterCreate) },
+            { key: 'new-folder', label: t('explorer.menuNewFolder'), onSelect: () => createFolderAction(stores.api, root, '', refreshAfterCreate) },
+            { key: 'sep-1', label: '---', onSelect: () => {} },
+            { key: 'view-path', label: t('explorer.menuPath'), onSelect: () => viewPathAction(root) },
+          ],
+        })
+      }}
+    >
       <PreviewTabs
         tabs={state.tabs}
         activeTabId={state.activeTabId}
@@ -201,6 +228,7 @@ export function PreviewPanel({ stores }: { stores: PanelStores }): JSX.Element {
         />
       )}
       {menu !== null && <ContextMenu state={menu} onClose={() => setMenu(null)} />}
+      <ContextMenu state={blankMenu} onClose={() => setBlankMenu(null)} />
       {closingIds !== null && (
         <ConfirmDialog
           title={t('preview.closeConfirmTitle')}
