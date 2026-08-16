@@ -41,11 +41,13 @@ export const HIGHLIGHT_COLORS = [
  * @param exec - applies the command to the (restored) selection + marks dirty.
  * @param saveSelection - snapshots the editable's selection (called on mousedown).
  */
-export function ColorButton({ command, label, exec, saveSelection }: {
+export function ColorButton({ command, label, exec, saveSelection, active = false }: {
   command: 'foreColor' | 'hiliteColor'
   label: string
   exec: (cmd: string, value?: string) => void
   saveSelection: () => void
+  /** True while the current selection carries this color (lights the button). */
+  active?: boolean
 }): JSX.Element {
   const [color, setColor] = useState(command === 'foreColor' ? '#000000' : '#ffff00')
   const [open, setOpen] = useState(false)
@@ -77,7 +79,7 @@ export function ColorButton({ command, label, exec, saveSelection }: {
       {/* The "A" glyph: applies the REMEMBERED color to the selection. */}
       <button
         type="button"
-        className={previewCss.colorButtonGlyph}
+        className={`${previewCss.colorButtonGlyph}${active ? ` ${previewCss.colorButtonGlyphActive}` : ''}`}
         aria-label={label}
         onMouseDown={(e) => { e.preventDefault(); saveSelection() }}
         onClick={() => exec(command, color)}

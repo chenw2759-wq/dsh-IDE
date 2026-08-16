@@ -25,6 +25,7 @@ import { readSettings } from '../settings.ts'
 import { t } from '../locales.ts'
 import previewCss from '../styles/preview.module.css'
 import { ColorButton } from './color-button.tsx'
+import { EMPTY_FORMATS, queryFormats, type ActiveFormats } from './formats.ts'
 
 const FONTS = ['宋体', '黑体', '仿宋', '楷体', 'Arial', 'Times New Roman', 'Microsoft YaHei', 'Courier New', 'sans-serif', 'serif']
 const SIZES = [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48]
@@ -64,17 +65,20 @@ function toggleStyle(style: string, value: string): void {
 /** The office editing toolbar (tools hidden per settings). `exec` applies a
  *  command to the (restored) selection; `saveSelection` snapshots the selection
  *  on mousedown of every focus-stealing control. */
-export function OfficeToolbar({ exec, saveSelection, onSave, dirty }: {
+export function OfficeToolbar({ exec, saveSelection, onSave, dirty, formats }: {
   exec: (command: string, value?: string) => void
   saveSelection: () => void
   onSave: () => void
   dirty: boolean
+  /** Current selection format state (lights the matching buttons). */
+  formats: ActiveFormats
 }): JSX.Element {
   const tools = readSettings().editorTools
   const [font, setFont] = useState('')
   const [size, setSize] = useState('')
   const [marginOpen, setMarginOpen] = useState(false)
   const [marginValue, setMarginValue] = useState('2em')
+  const active = (on: boolean): string => (on ? ` ${previewCss.officeToolBtnActive}` : '')
 
   const applyFont = (value: string): void => {
     setFont(value)
@@ -121,31 +125,31 @@ export function OfficeToolbar({ exec, saveSelection, onSave, dirty }: {
       )}
       {tools.boldItalic && (
         <>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.boldItalic')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('bold') }}>
+          <button type="button" className={`${previewCss.officeToolBtn}${active(formats.bold)}`} title={t('settings.tool.boldItalic')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('bold') }}>
             <strong>B</strong>
           </button>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.boldItalic')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('italic') }}>
+          <button type="button" className={`${previewCss.officeToolBtn}${active(formats.italic)}`} title={t('settings.tool.boldItalic')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('italic') }}>
             <em>I</em>
           </button>
         </>
       )}
       {tools.align && (
         <>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('justifyLeft') }}>左</button>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('justifyCenter') }}>中</button>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('justifyRight') }}>右</button>
+          <button type="button" className={`${previewCss.officeToolBtn}${active(formats.justifyLeft)}`} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('justifyLeft') }}>左</button>
+          <button type="button" className={`${previewCss.officeToolBtn}${active(formats.justifyCenter)}`} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('justifyCenter') }}>中</button>
+          <button type="button" className={`${previewCss.officeToolBtn}${active(formats.justifyRight)}`} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('justifyRight') }}>右</button>
         </>
       )}
       {tools.underline && (
-        <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.underline')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('underline') }}>
+        <button type="button" className={`${previewCss.officeToolBtn}${active(formats.underline)}`} title={t('settings.tool.underline')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('underline') }}>
           <span style={{ textDecoration: 'underline' }}>U</span>
         </button>
       )}
       {tools.color && (
-        <ColorButton command="foreColor" label={t('settings.tool.color')} exec={exec} saveSelection={saveSelection} />
+        <ColorButton command="foreColor" label={t('settings.tool.color')} exec={exec} saveSelection={saveSelection} active={formats.foreColor} />
       )}
       {tools.highlight && (
-        <ColorButton command="hiliteColor" label={t('settings.tool.highlight')} exec={exec} saveSelection={saveSelection} />
+        <ColorButton command="hiliteColor" label={t('settings.tool.highlight')} exec={exec} saveSelection={saveSelection} active={formats.hiliteColor} />
       )}
       {tools.spacing && (
         <>
@@ -199,6 +203,7 @@ export function EditableOffice({ html, contentType, onEdited, onSave, dirty }: {
   const ref = useRef<HTMLDivElement>(null)
   const savedRange = useRef<Range | null>(null)
   const [ready, setReady] = useState(false)
+  const [formats, setFormats] = useState<ActiveFormats>(EMPTY_FORMATS)
 
   // Inject the initial HTML exactly once; afterwards the browser owns the DOM
   // (React never re-sets innerHTML, so the caret stays where the user types).
@@ -208,6 +213,23 @@ export function EditableOffice({ html, contentType, onEdited, onSave, dirty }: {
     setReady(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [html])
+
+  // Track the selection's format state so the toolbar lights matching buttons.
+  useEffect(() => {
+    const el = ref.current
+    if (el === null) return
+    const refresh = (): void => {
+      const sel = window.getSelection()
+      if (sel === null || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) return
+      setFormats(queryFormats(document))
+    }
+    document.addEventListener('selectionchange', refresh)
+    el.addEventListener('input', refresh)
+    return () => {
+      document.removeEventListener('selectionchange', refresh)
+      el.removeEventListener('input', refresh)
+    }
+  }, [])
 
   const saveSelection = (): void => {
     const sel = window.getSelection()
@@ -232,11 +254,16 @@ export function EditableOffice({ html, contentType, onEdited, onSave, dirty }: {
     restoreSelection()
     exec(command, value)
     if (ref.current !== null) onEdited(ref.current.innerHTML)
+    // Re-sync the toolbar state immediately after the command.
+    const sel = window.getSelection()
+    if (sel !== null && sel.rangeCount > 0 && ref.current !== null && ref.current.contains(sel.anchorNode)) {
+      setFormats(queryFormats(document))
+    }
   }
 
   return (
     <div className={previewCss.officeEditWrap}>
-      <OfficeToolbar exec={execWithSelection} saveSelection={saveSelection} onSave={onSave} dirty={dirty} />
+      <OfficeToolbar exec={execWithSelection} saveSelection={saveSelection} onSave={onSave} dirty={dirty} formats={formats} />
       <div
         ref={ref}
         className={previewCss.officeScroll}

@@ -155,6 +155,8 @@ Settings (font / size / bold-italic / align / underline / color / highlight / sp
 rebuilds the docx/xlsx/pptx from the edited HTML and writes it back as binary (mtime-conflict guarded).
 Known limit: complex layouts (headers/footers, merged cells) are not preserved.
 
+![Word editable](docs/word可编辑.png)
+
 ### 🎨 HTML / Markdown Visual Editing (Word-style in-place)
 
 The toolbar's "Visual editing" makes the rendered result itself the editable document (no more floating
@@ -165,7 +167,11 @@ inline-HTML subset, so changing the text color no longer paints the background a
 survive saving. **HTML** edits the FULL document in a design-mode iframe (PPT-style rich editing: color
 / size / bold-italic / align / underline / highlight) — the original `<style>` and canvas background
 render as-is, and saving serializes the whole document (no more single-column body-fragment overlay).
-The toolbar provides bold / italic / underline / color / highlight / font / size / align / undo / redo. Text color and highlight are **Word-style buttons**: one click on the "A" applies the currently remembered color to the selection (a bar under the A shows the current color), and the small "▾" opens a palette where picking a swatch both remembers and applies it — no more multi-click color picking, and color can now be combined with bold/italic on the same selection.
+The toolbar provides bold / italic / underline / color / highlight / font / size / align / undo / redo. Text color and highlight are **Word-style buttons**: one click on the "A" applies the currently remembered color to the selection (a bar under the A shows the current color), and the small "▾" opens a palette where picking a swatch both remembers and applies it — no more multi-click color picking, and color can now be combined with bold/italic on the same selection. The toolbar **lights up the buttons matching the current selection's formatting** (bold / italic / underline / align / color / highlight get a shadow), so you can see at a glance what formatting the selected text carries.
+
+![Markdown editable](docs/markdown可编辑.png)
+
+![HTML editable](docs/html可编辑.png)
 
 ![Visual editing](docs/可视化编辑.png)
 

@@ -32,6 +32,7 @@ import { t } from '../locales.ts'
 import previewCss from '../styles/preview.module.css'
 import { htmlToMarkdown } from './html-to-markdown.ts'
 import { ColorButton } from './color-button.tsx'
+import { EMPTY_FORMATS, queryFormats, type ActiveFormats } from './formats.ts'
 
 const FONTS = ['宋体', '黑体', '仿宋', '楷体', 'Arial', 'Times New Roman', 'Microsoft YaHei', 'sans-serif', 'serif']
 const SIZES = [12, 14, 16, 18, 20, 24, 28, 32, 40, 48]
@@ -51,15 +52,18 @@ function isFullDocument(html: string): boolean {
  * current selection and is called on mousedown of every focus-stealing
  * control (select / color input), BEFORE focus moves away.
  */
-function VisualToolbar({ exec, saveSelection, onSave, dirty }: {
+function VisualToolbar({ exec, saveSelection, onSave, dirty, formats }: {
   exec: (command: string, value?: string) => void
   saveSelection: () => void
   onSave: () => void
   dirty: boolean
+  /** Current selection format state (lights the matching buttons). */
+  formats: ActiveFormats
 }): JSX.Element {
   const tools = readSettings().editorTools
   const [font, setFont] = useState('')
   const [size, setSize] = useState('')
+  const active = (on: boolean): string => (on ? ` ${previewCss.officeToolBtnActive}` : '')
 
   return (
     <div className={previewCss.officeToolbar}>
@@ -83,25 +87,25 @@ function VisualToolbar({ exec, saveSelection, onSave, dirty }: {
       )}
       {tools.boldItalic && (
         <>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.boldItalic')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('bold') }}><strong>B</strong></button>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.boldItalic')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('italic') }}><em>I</em></button>
+          <button type="button" className={`${previewCss.officeToolBtn}${active(formats.bold)}`} title={t('settings.tool.boldItalic')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('bold') }}><strong>B</strong></button>
+          <button type="button" className={`${previewCss.officeToolBtn}${active(formats.italic)}`} title={t('settings.tool.boldItalic')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('italic') }}><em>I</em></button>
         </>
       )}
       {tools.underline && (
-        <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.underline')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('underline') }}><span style={{ textDecoration: 'underline' }}>U</span></button>
+        <button type="button" className={`${previewCss.officeToolBtn}${active(formats.underline)}`} title={t('settings.tool.underline')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('underline') }}><span style={{ textDecoration: 'underline' }}>U</span></button>
       )}
       {tools.align && (
         <>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('justifyLeft') }}>左</button>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('justifyCenter') }}>中</button>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('justifyRight') }}>右</button>
+          <button type="button" className={`${previewCss.officeToolBtn}${active(formats.justifyLeft)}`} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('justifyLeft') }}>左</button>
+          <button type="button" className={`${previewCss.officeToolBtn}${active(formats.justifyCenter)}`} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('justifyCenter') }}>中</button>
+          <button type="button" className={`${previewCss.officeToolBtn}${active(formats.justifyRight)}`} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('justifyRight') }}>右</button>
         </>
       )}
       {tools.color && (
-        <ColorButton command="foreColor" label={t('settings.tool.color')} exec={exec} saveSelection={saveSelection} />
+        <ColorButton command="foreColor" label={t('settings.tool.color')} exec={exec} saveSelection={saveSelection} active={formats.foreColor} />
       )}
       {tools.highlight && (
-        <ColorButton command="hiliteColor" label={t('settings.tool.highlight')} exec={exec} saveSelection={saveSelection} />
+        <ColorButton command="hiliteColor" label={t('settings.tool.highlight')} exec={exec} saveSelection={saveSelection} active={formats.hiliteColor} />
       )}
       <span className={previewCss.officeToolbarSpacer} />
       <button type="button" className={`${previewCss.officeToolBtn} ${previewCss.officeSave}`} disabled={!dirty} onClick={onSave}>{t('preview.save')}</button>
@@ -125,6 +129,7 @@ export function VisualEditor({ html, contentType, onSave }: {
   const savedRange = useRef<Range | null>(null)
   const [dirty, setDirty] = useState(false)
   const [ready, setReady] = useState(false)
+  const [formats, setFormats] = useState<ActiveFormats>(EMPTY_FORMATS)
 
   useEffect(() => {
     if (ref.current === null || ready) return
@@ -132,6 +137,24 @@ export function VisualEditor({ html, contentType, onSave }: {
     setReady(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [html])
+
+  // Track the selection's format state so the toolbar can light the matching
+  // buttons (bold / italic / underline / align / color / highlight).
+  useEffect(() => {
+    const el = ref.current
+    if (el === null) return
+    const refresh = (): void => {
+      const sel = window.getSelection()
+      if (sel === null || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) return
+      setFormats(queryFormats(document))
+    }
+    document.addEventListener('selectionchange', refresh)
+    el.addEventListener('input', refresh)
+    return () => {
+      document.removeEventListener('selectionchange', refresh)
+      el.removeEventListener('input', refresh)
+    }
+  }, [])
 
   const saveSelection = (): void => {
     const sel = window.getSelection()
@@ -161,6 +184,11 @@ export function VisualEditor({ html, contentType, onSave }: {
       // best-effort
     }
     setDirty(true)
+    // Re-sync the toolbar state immediately after the command.
+    const sel = window.getSelection()
+    if (sel !== null && sel.rangeCount > 0 && ref.current !== null && ref.current.contains(sel.anchorNode)) {
+      setFormats(queryFormats(document))
+    }
   }
 
   const save = (): void => {
@@ -172,7 +200,7 @@ export function VisualEditor({ html, contentType, onSave }: {
 
   return (
     <div className={previewCss.visualWrap}>
-      <VisualToolbar exec={exec} saveSelection={saveSelection} onSave={save} dirty={dirty} />
+      <VisualToolbar exec={exec} saveSelection={saveSelection} onSave={save} dirty={dirty} formats={formats} />
       <div
         ref={ref}
         className={`${previewCss.officeScroll} ${previewCss.visualEditable}`}
@@ -193,6 +221,7 @@ function HtmlVisualEditor({ html, onSave }: { html: string; onSave: (editedHtml:
   const savedRange = useRef<Range | null>(null)
   const [dirty, setDirty] = useState(false)
   const [ready, setReady] = useState(false)
+  const [formats, setFormats] = useState<ActiveFormats>(EMPTY_FORMATS)
   const fullDoc = isFullDocument(html)
 
   const srcDoc = fullDoc
@@ -204,12 +233,21 @@ function HtmlVisualEditor({ html, onSave }: { html: string; onSave: (editedHtml:
     return doc === null || doc === undefined ? undefined : fn(doc)
   }
 
+  const refreshFormats = (): void => {
+    withDoc((doc) => {
+      const sel = doc.getSelection()
+      if (sel === null || sel.rangeCount === 0) return
+      setFormats(queryFormats(doc))
+    })
+  }
+
   const handleLoad = (): void => {
     const doc = frameRef.current?.contentDocument
     if (doc === null || doc === undefined) return
     if (ready) return
     doc.designMode = 'on'
-    doc.addEventListener('input', () => setDirty(true))
+    doc.addEventListener('input', () => { setDirty(true); refreshFormats() })
+    doc.addEventListener('selectionchange', refreshFormats)
     setReady(true)
   }
 
@@ -244,6 +282,7 @@ function HtmlVisualEditor({ html, onSave }: { html: string; onSave: (editedHtml:
       }
     })
     setDirty(true)
+    refreshFormats()
   }
 
   const save = (): void => {
@@ -258,7 +297,7 @@ function HtmlVisualEditor({ html, onSave }: { html: string; onSave: (editedHtml:
 
   return (
     <div className={previewCss.visualWrap}>
-      <VisualToolbar exec={exec} saveSelection={saveSelection} onSave={save} dirty={dirty} />
+      <VisualToolbar exec={exec} saveSelection={saveSelection} onSave={save} dirty={dirty} formats={formats} />
       <iframe
         ref={frameRef}
         className={previewCss.visualFrame}

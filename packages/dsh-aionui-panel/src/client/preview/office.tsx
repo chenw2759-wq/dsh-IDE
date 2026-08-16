@@ -102,12 +102,24 @@ function runSize(run: Element): number | undefined {
   return Number.isFinite(half) ? half / 2 : undefined
 }
 
-function runFont(run: Element): string | undefined {
+/** The run's fonts: Latin (`w:ascii`/`w:hAnsi`) then East-Asian (`w:eastAsia`),
+ *  in CSS order so Latin glyphs use the Latin face and CJK glyphs fall back to
+ *  the East-Asian face. Returns [] when the run carries no rFonts. */
+function runFont(run: Element): string[] {
   const rPr = Array.from(run.children).find((c) => localName(c) === 'rPr')
-  if (rPr === undefined) return undefined
+  if (rPr === undefined) return []
   const rFonts = Array.from(rPr.children).find((c) => localName(c) === 'rFonts')
-  const ascii = rFonts?.getAttributeNS(W, 'ascii') ?? rFonts?.getAttribute('w:ascii') ?? undefined
-  return ascii !== undefined && ascii !== '' ? ascii : undefined
+  if (rFonts === undefined) return []
+  const attr = (name: string): string | undefined => {
+    const v = rFonts.getAttributeNS(W, name) ?? rFonts.getAttribute(`w:${name}`) ?? undefined
+    return v !== undefined && v !== '' ? v.trim() : undefined
+  }
+  const fonts: string[] = []
+  const latin = attr('ascii') ?? attr('hAnsi')
+  if (latin !== undefined) fonts.push(latin)
+  const eastAsia = attr('eastAsia')
+  if (eastAsia !== undefined && !fonts.includes(eastAsia)) fonts.push(eastAsia)
+  return fonts
 }
 
 /** Render one docx run to an HTML string (formatting from rPr). */
@@ -123,8 +135,8 @@ function renderRun(run: Element): string {
   if (color !== undefined) styles.push(`color:${color}`)
   const size = runSize(run)
   if (size !== undefined) styles.push(`font-size:${size}pt`)
-  const font = runFont(run)
-  if (font !== undefined) styles.push(`font-family:'${font.replace(/'/g, '')}'`)
+  const fonts = runFont(run)
+  if (fonts.length > 0) styles.push(`font-family:${fonts.map((f) => `'${f.replace(/'/g, '')}'`).join(',')}`)
   const highlight = runHighlight(run)
   if (highlight !== undefined) styles.push(`background-color:${highlight}`)
   const style = styles.length > 0 ? ` style="${styles.join(';')}"` : ''
@@ -318,6 +330,19 @@ function styleToRPr(style: string): string {
   if (sizePt !== undefined) {
     const pt = Number.parseFloat(sizePt)
     if (Number.isFinite(pt)) parts.push(`<w:sz w:val="${Math.round(pt * 2)}"/>`)
+  }
+  // Font family: parse `'Latin','宋体'` and rebuild w:rFonts (ascii/hAnsi from
+  // the first Latin name, eastAsia from the first CJK name). Without this the
+  // edited fonts would be dropped on save.
+  const fontFamily = match('font-family')
+  if (fontFamily !== undefined) {
+    const names = fontFamily.split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter((s) => s !== '')
+    if (names.length > 0) {
+      const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      const latin = esc(names[0])
+      const eastAsia = esc(names.find((n) => /[\u4e00-\u9fff]/.test(n)) ?? names[names.length - 1])
+      parts.push(`<w:rFonts w:ascii="${latin}" w:hAnsi="${latin}" w:eastAsia="${eastAsia}"/>`)
+    }
   }
   const highlight = match('background-color')
   if (highlight !== undefined) {

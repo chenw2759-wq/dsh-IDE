@@ -1331,6 +1331,17 @@ html[style*="color-scheme: light"] {
   cursor: default;
 }
 
+/* Active formatting button: the selection carries this format (Word-style). */
+.officeToolBtnActive {
+  color: #fff;
+  background: var(--aion-brand, #165dff);
+  border-color: var(--aion-brand, #165dff);
+  box-shadow: 0 1px 5px rgba(22, 93, 255, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+.officeToolBtnActive:hover {
+  background: var(--aion-brand, #165dff);
+}
+
 .officeColor {
   width: 26px;
   height: 24px;
@@ -1393,6 +1404,20 @@ html[style*="color-scheme: light"] {
 }
 .colorButtonGlyph:hover {
   background: var(--aion-bg-3, #e5e6eb);
+}
+/* Active: the selection currently carries this color (shadow like the other
+   active formatting buttons). */
+.colorButtonGlyphActive {
+  color: #fff;
+  background: var(--aion-brand, #165dff);
+  border-color: var(--aion-brand, #165dff);
+  box-shadow: 0 1px 5px rgba(22, 93, 255, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+.colorButtonGlyphActive:hover {
+  background: var(--aion-brand, #165dff);
+}
+.colorButtonGlyphActive .colorButtonBar {
+  background: #fff !important;
 }
 .colorButtonLetter {
   font-size: 11px;

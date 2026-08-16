@@ -7,6 +7,8 @@
 ### 已完成（按实施阶段）
 
 **修复（视觉编辑 / Word 编辑 / 斑马纹 / 会话隔离）**
+- **docx 预览正确呈现不同字体（含中文字体）**：`runFont` 原来只读 `w:rFonts/w:ascii`（拉丁字体），中文 docx 的字体都写在 `w:eastAsia`（宋体/楷体/黑体…），所以预览里全是一个字体。现在同时读 `w:ascii`/`w:hAnsi`/`w:eastAsia`，按「拉丁字体 + 东亚字体」输出 `font-family:'Arial','宋体'`（拉丁字形走拉丁字体、汉字自动回退到东亚字体）；保存重建 `styleToRPr` 也补上 `w:rFonts`，编辑保存不再丢字体。
+- **工具栏高亮当前选区已有的格式（Word 式）**：编辑时把光标放到粗体/斜体/下划线/对齐/颜色/底色文字上，对应的按钮会**显示阴影高亮**（`queryCommandState` 查粗斜体下划线对齐；颜色/底色走 DOM 祖先链查显式 `color`/`background-color`，避免 `queryCommandValue` 返回默认色导致误亮）。md 可视化 / HTML iframe / Office 三编辑器一致。
 - **可视化编辑的格式命令不再丢失**：工具栏的 `<select>`/`<input type=color>` 会抢焦点，导致 `execCommand('foreColor'/'fontSize'/…)` 在空选区上执行（颜色看着像「刷背景」、字号粗斜体不生效）。现在每个工具在 `onMouseDown` 先快照选区、执行前恢复选区，且格式命令立即置脏（保存按钮马上可用）。
 - **字色/底色改成 Word 式颜色按钮（一处组件，md/HTML/Office 三编辑器共用）**：把两个原生 `<input type=color>` 对话框换成 `ColorButton`——主「A」按钮（下方色条显示当前颜色）**一键**把记住的颜色套到当前选区；旁边小「▾」箭头弹出调色板（字色 17 色 / 底色 15 色），点色块即「记住该色并对选区生效」；之后再选文字、点一下「A」就上色，彻底去掉「选颜色要点好几下」的别扭逻辑。色块/按钮在 `onMouseDown` 先 `preventDefault` 并快照选区，所以**字色/底色与粗体/斜体可对同一段同时生效**（原生取色器抢焦点压垮选区正是之前「无法同时设」的根因）。三编辑器已用真实鼠标事件（CDP `Input.dispatchMouseEvent`）端到端验证：md / HTML-iframe / docx 均「粗体 + 颜色同选区生效、选区不丢」。
 - **粗体/斜体/下划线不再吃到「上一次的选区」**：颜色按钮会留下 `savedRange` 快照，改完颜色后点粗体/斜体/下划线会用这个**过期快照**去恢复选区——于是「改完颜色，再改粗斜体就作用到刚才那段、或干脆改不动」（字号/字体因为走 `<select>` 自带 `onMouseDown` 快照所以没事）。修复：粗体/斜体/下划线/对齐/行距/页边距按钮在 `onMouseDown` 也先 `saveSelection()` 快照当前选区；且 `restoreSelection()` 用完快照即**清空**（consume-once），永不复用过期快照。
