@@ -1239,6 +1239,18 @@ html[style*="color-scheme: light"] {
   vertical-align: middle;
 }
 
+.officeHeader {
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--aion-bg-3, #e5e6eb);
+}
+
+.officeFooter {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--aion-bg-3, #e5e6eb);
+}
+
 .officeHeading {
   margin: 14px 0 8px;
   font-weight: 700;

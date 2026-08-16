@@ -29,6 +29,11 @@ dsh plugin --profile web add link:/Users/zcl/code/dsh-web-ui/packages/dsh-aionui
   url；源码/预览切换、分屏编辑（比例持久化）、保存（mtime 冲突检测）、下载、
   刷新（4 态：不渲染死按钮）、dirty 点、中键关闭、右键菜单批量关闭
   （dirty 确认）、tab 溢出渐变指示器。
+  docx 预览在浏览器端解 ZIP 并渲染段落/表格/run 格式（加粗/斜体/下划线/颜色/
+  字号/字体/高亮/底纹）、内联图片与形状照片（`w:drawing`/`a:blip`，含
+  `mc:AlternateContent` 形状）、内容控件（`w:sdt`）、页眉页脚（`header1.xml` 的
+  logo/信头）；编辑保存时从编辑后 HTML 重建 `word/document.xml`，run 格式不丢。
+  图表与嵌入对象暂不解析（已知限制）。
 
 交互细节：
 

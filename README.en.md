@@ -143,7 +143,7 @@ renders as Markdown; syntax highlighting supports R natively.
 
 ### 📄 Office Preview (docx / xlsx / pptx)
 
-- **docx**: paragraphs / tables / bold / italic / underline / color / size / highlight / alignment rendered
+- **docx**: paragraphs / tables / bold / italic / underline / color / size / highlight / alignment / fonts (incl. CJK `w:eastAsia`) / paragraph & run shading / **inline images & shape photos** (`w:drawing`/`a:blip`, incl. `mc:AlternateContent` shapes) / **content controls** (`w:sdt`) / **headers & footers** (letterhead logos from `header1.xml` etc.) rendered
 - **xlsx**: first worksheet rendered as a table (shared strings resolved)
 - **pptx**: one card per slide
 - Client-side ZIP parsing — no host dependencies, no dsh restart
@@ -152,8 +152,9 @@ renders as Markdown; syntax highlighting supports R natively.
 
 The toolbar's "Edit" arms contenteditable editing: the toolbar shows only the tools checked in
 Settings (font / size / bold-italic / align / underline / color / highlight / spacing / margins); saving
-rebuilds the docx/xlsx/pptx from the edited HTML and writes it back as binary (mtime-conflict guarded).
-Known limit: complex layouts (headers/footers, merged cells) are not preserved.
+rebuilds the docx/xlsx/pptx from the edited HTML and writes it back as binary (mtime-conflict guarded;
+run formatting — bold / italic / underline / color / size / font / highlight — survives edit + save).
+Known limit: charts (`word/charts/*`) and embedded objects (embedded Excel) are not parsed or preserved.
 
 ![Word editable](docs/word可编辑.png)
 

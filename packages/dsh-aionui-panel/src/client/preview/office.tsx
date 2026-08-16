@@ -164,12 +164,24 @@ function collectEmbedIds(xml: string): string[] {
   return [...ids]
 }
 
-/** Resolve every r:embed id to a data URL (async; empty map when no zip). */
-async function resolveImages(zip: JSZip | undefined, ids: string[]): Promise<Map<string, string>> {
+/** The relationship part path for a given source part (OPC convention). */
+function relsPathFor(partPath: string): string {
+  const idx = partPath.lastIndexOf('/')
+  const dir = idx >= 0 ? partPath.slice(0, idx + 1) : ''
+  const name = partPath.slice(idx + 1)
+  return `${dir}_rels/${name}.rels`
+}
+
+/** Resolve every r:embed id in `ids` to a data URL using the relationship part
+ *  that belongs to `partPath` (e.g. word/document.xml → word/_rels/document.xml.rels;
+ *  word/header1.xml → word/_rels/header1.xml.rels). Relative targets resolve
+ *  against the part's own directory. */
+async function resolvePartImages(zip: JSZip | undefined, partPath: string, ids: string[]): Promise<Map<string, string>> {
   const map = new Map<string, string>()
   if (zip === undefined || ids.length === 0) return map
+  const base = partPath.includes('/') ? partPath.slice(0, partPath.lastIndexOf('/') + 1) : ''
   let rels = new Map<string, string>()
-  const relsFile = zip.file('word/_rels/document.xml.rels')
+  const relsFile = zip.file(relsPathFor(partPath))
   if (relsFile !== null) {
     const xml = await relsFile.async('string')
     const doc = new DOMParser().parseFromString(xml, 'application/xml')
@@ -182,7 +194,7 @@ async function resolveImages(zip: JSZip | undefined, ids: string[]): Promise<Map
   await Promise.all(ids.map(async (id) => {
     const target = rels.get(id)
     if (target === undefined) return
-    const path = target.startsWith('/') ? target.slice(1) : `word/${target}`
+    const path = target.startsWith('/') ? target.slice(1) : base + target
     const file = zip.file(path)
     if (file === null) return
     try {
@@ -195,10 +207,40 @@ async function resolveImages(zip: JSZip | undefined, ids: string[]): Promise<Map
   return map
 }
 
+/** Render the document's header/footer parts (found via word/_rels/document.xml.rels
+ *  header/footer relationships) so a template's logo/letterhead is not dropped. */
+async function renderHeaderFooter(zip: JSZip | undefined): Promise<string> {
+  if (zip === undefined) return ''
+  const relsFile = zip.file('word/_rels/document.xml.rels')
+  if (relsFile === null) return ''
+  const relsXml = await relsFile.async('string')
+  const relsDoc = new DOMParser().parseFromString(relsXml, 'application/xml')
+  const parts: string[] = []
+  for (const rel of allByLocal(relsDoc.documentElement, 'Relationship')) {
+    const type = rel.getAttribute('Type') ?? ''
+    const target = rel.getAttribute('Target') ?? ''
+    if (!type.endsWith('/header') && !type.endsWith('/footer')) continue
+    if (target === '') continue
+    const path = target.startsWith('/') ? target.slice(1) : `word/${target}`
+    const file = zip.file(path)
+    if (file === null) continue
+    const partXml = await file.async('string')
+    const images = await resolvePartImages(zip, path, collectEmbedIds(partXml))
+    const doc = new DOMParser().parseFromString(partXml, 'application/xml')
+    const content = renderBlocks(doc.documentElement, images)
+    if (content !== '') {
+      const cls = type.endsWith('/header') ? previewCss.officeHeader : previewCss.officeFooter
+      parts.push(`<div class="${cls}">${content}</div>`)
+    }
+  }
+  return parts.join('')
+}
+
 /** Render one docx run to an HTML string (formatting from rPr). */
 function renderRun(run: Element, images: Map<string, string>): string {
-  // An inline drawing (image) inside a run.
-  const drawing = Array.from(run.children).find((c) => localName(c) === 'drawing')
+  // An inline drawing (image) inside a run — may be nested in mc:AlternateContent
+  // (mc:Choice wps / mc:Fallback pict), so search recursively, not just direct children.
+  const drawing = allByLocal(run, 'drawing')[0]
   if (drawing !== undefined) {
     const blip = allByLocal(drawing, 'blip')[0]
     const embed = blip?.getAttributeNS(R, 'embed') ?? blip?.getAttribute('r:embed') ?? undefined
@@ -232,6 +274,50 @@ function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
+/** Collect every w:r run under `container`, recursing through wrapper elements
+ *  (w:sdt / w:sdtContent / w:hyperlink / w:ins / w:smartTag / mc:AlternateContent
+ *  …) so content controls and tracked changes don't drop their text. Nested
+ *  block elements (w:p / w:tbl) are not runs and are skipped. */
+function collectRuns(container: Element): Element[] {
+  const runs: Element[] = []
+  const walk = (node: Element): void => {
+    for (const child of Array.from(node.children)) {
+      const name = localName(child)
+      if (name === 'r') {
+        runs.push(child)
+        continue
+      }
+      if (name === 'p' || name === 'tbl') continue
+      walk(child)
+    }
+  }
+  walk(container)
+  return runs
+}
+
+/** Render every block (w:p / w:tbl) under `container` in document order,
+ *  recursing through wrapper elements (w:sdt / w:sdtContent / mc:AlternateContent
+ *  …) so block-level content controls don't drop their paragraphs/tables. */
+function renderBlocks(container: Element, images: Map<string, string>): string {
+  const blocks: string[] = []
+  const walk = (node: Element): void => {
+    for (const child of Array.from(node.children)) {
+      const name = localName(child)
+      if (name === 'tbl') {
+        blocks.push(renderTable(child, images))
+        continue
+      }
+      if (name === 'p') {
+        blocks.push(renderParagraph(child, images))
+        continue
+      }
+      walk(child)
+    }
+  }
+  walk(container)
+  return blocks.join('')
+}
+
 /** Render one docx paragraph (w:p) to an HTML string. */
 function renderParagraph(p: Element, images: Map<string, string>): string {
   const pPr = Array.from(p.children).find((c) => localName(c) === 'pPr')
@@ -239,14 +325,7 @@ function renderParagraph(p: Element, images: Map<string, string>): string {
   const styleVal = style?.getAttributeNS(W, 'val') ?? style?.getAttribute('w:val') ?? ''
   const jc = pPr !== undefined ? Array.from(pPr.children).find((c) => localName(c) === 'jc') : undefined
   const align = jc?.getAttributeNS(W, 'val') ?? jc?.getAttribute('w:val') ?? ''
-  const body = Array.from(p.children)
-    .filter((c) => localName(c) === 'r' || localName(c) === 'hyperlink' || localName(c) === 'ins')
-    .flatMap((c) => {
-      if (localName(c) === 'r') return [renderRun(c, images)]
-      // hyperlink/ins: recurse runs
-      return Array.from(c.children).filter((cc) => localName(cc) === 'r').map((r) => renderRun(r, images))
-    })
-    .join('')
+  const body = collectRuns(p).map((r) => renderRun(r, images)).join('')
   const shading = paragraphShading(p)
   const extra: string[] = []
   if (align === 'center') extra.push('text-align:center')
@@ -264,30 +343,22 @@ function renderTable(tbl: Element, images: Map<string, string>): string {
   const rows = Array.from(tbl.children).filter((c) => localName(c) === 'tr')
   const html = rows.map((tr) => {
     const cells = Array.from(tr.children).filter((c) => localName(c) === 'tc')
-    return `<tr>${cells.map((tc) => {
-      const paras = Array.from(tc.children).filter((c) => localName(c) === 'p').map((p) => renderParagraph(p, images))
-      return `<td>${paras.join('')}</td>`
-    }).join('')}</tr>`
+    return `<tr>${cells.map((tc) => `<td>${renderBlocks(tc, images)}</td>`).join('')}</tr>`
   }).join('')
   return `<table class="${previewCss.officeTable}">${html}</table>`
 }
 
-/** Parse docx into an HTML body string (zip used to inline images). */
+/** Parse docx into an HTML body string (zip used to inline images + headers/footers). */
 export async function docxToHtml(xml: string, zip?: JSZip): Promise<string> {
-  const images = await resolveImages(zip, collectEmbedIds(xml))
+  const images = await resolvePartImages(zip, 'word/document.xml', collectEmbedIds(xml))
   const doc = new DOMParser().parseFromString(xml, 'application/xml')
   const root = doc.documentElement
-  // The document element is w:document; its single child is w:body. Walk the
-  // body's block-level children (w:p paragraphs, w:tbl tables).
+  // The document element is w:document; its single child is w:body. Render every
+  // block (recursing through content-control wrappers) in document order.
   const body = Array.from(root.children).find((c) => localName(c) === 'body')
   const container = body ?? root
-  const blocks: string[] = []
-  for (const child of Array.from(container.children)) {
-    const name = localName(child)
-    if (name === 'p') blocks.push(renderParagraph(child, images))
-    else if (name === 'tbl') blocks.push(renderTable(child, images))
-  }
-  return blocks.join('')
+  const headerFooter = await renderHeaderFooter(zip)
+  return headerFooter + renderBlocks(container, images)
 }
 
 /** Parse xlsx: resolve shared strings and render the first worksheet. */
