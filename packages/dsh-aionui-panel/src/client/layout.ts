@@ -535,10 +535,12 @@ export class PanelLayoutController {
     // Real interactive controls (mode toggle, collapse, tab close glyph, url
     // input…) are never drag origins — everything else on the strip is.
     if (target.closest('button, input, a, [data-aionui-close]')) return
-    // Capture the pointer so the browser can't take over the gesture (HTML5
-    // drag / text selection / scroll) and fire pointercancel mid-drag — the
-    // historical "real browser drag never moves" bug.
-    try { this.previewCol.setPointerCapture(event.pointerId) } catch { /* best-effort */ }
+    // IMPORTANT: do NOT setPointerCapture on pointerdown — capturing retargets
+    // the subsequent pointerup to the pane, which breaks the browser's click
+    // synthesis (exactly why tab clicks and the close glyph stopped working).
+    // preventDefault() here only stops text selection / native drag from
+    // starting (it does NOT block the click), so it stays; the pointer is
+    // captured only AFTER the gesture proves to be a real drag (arm, below).
     event.preventDefault()
 
     const frame = this.frame
@@ -585,6 +587,11 @@ export class PanelLayoutController {
       if (!armed) {
         if (Math.abs(moveEvent.clientX - startX) < DRAG_THRESHOLD_PX && Math.abs(moveEvent.clientY - startY) < DRAG_THRESHOLD_PX) return
         armed = true
+        // Only a real drag captures the pointer (keeps the browser from
+        // stealing the gesture mid-drag); a plain click stays uncaptured so the
+        // tab switch / close click still fire normally.
+        try { this.previewCol?.setPointerCapture(event.pointerId) } catch { /* best-effort */ }
+        if (moveEvent.cancelable) moveEvent.preventDefault()
         if (!wasFloat) {
           // Pull out into float: adopt the docked rect as the float origin,
           // then continue the drag 1:1 from where the pointer grabbed it.
