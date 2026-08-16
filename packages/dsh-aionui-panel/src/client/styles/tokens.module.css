@@ -159,9 +159,19 @@
 
 /* Floating preview pane: the tab-bar strip is the grab area (grab cursor);
    while a drag is in flight the controller marks the pane so no transition
-   fights the pointer. */
+   fights the pointer. touch-action:none + no text/image native drag are
+   critical: otherwise the BROWSER takes over the gesture (scroll / text
+   selection / HTML5 drag) and fires pointercancel, which kills the drag. */
 :global(.aionui-preview-col.aionui-float-pane [data-aionui-float-drag]) {
   cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+:global(.aionui-preview-col.aionui-float-pane [data-aionui-float-drag] *),
+:global(.aionui-preview-col.aionui-float-pane [data-aionui-float-drag]) * {
+  user-select: none;
+  -webkit-user-drag: none;
 }
 :global(.aionui-preview-col.aionui-float-pane [data-aionui-float-drag]:active) {
   cursor: grabbing;
@@ -171,23 +181,27 @@
 }
 
 /* Floating preview resize handle (bottom-right corner): a diagonal grip the
-   user drags to change the pane's width + height. */
+   user drags to change the pane's width + height. touch-action:none + no
+   native drag so the pointer gesture is never stolen by the browser. */
 :global(.aionui-float-resize-handle) {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
   background: transparent;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 :global(.aionui-float-resize-handle::after) {
   content: '';
   position: absolute;
-  right: 3px;
-  bottom: 3px;
-  width: 10px;
-  height: 10px;
-  border-right: 2px solid var(--aion-bg-3);
-  border-bottom: 2px solid var(--aion-bg-3);
-  border-bottom-right-radius: 3px;
+  right: 4px;
+  bottom: 4px;
+  width: 12px;
+  height: 12px;
+  border-right: 2.5px solid var(--aion-bg-3);
+  border-bottom: 2.5px solid var(--aion-bg-3);
+  border-bottom-right-radius: 4px;
   transition: border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: none;
 }

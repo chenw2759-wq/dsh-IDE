@@ -104,7 +104,7 @@ export function PreviewToolbar({
   const canVisual = contentType === 'html' || contentType === 'markdown'
 
   return (
-    <div className={previewCss.toolbar}>
+    <div className={previewCss.toolbar} data-aionui-float-drag="">
       {canToggleView && (
         <>
           <button

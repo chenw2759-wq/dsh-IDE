@@ -319,8 +319,8 @@ export class PanelLayoutController {
     this.floatResizeHandle.style.position = 'absolute'
     this.floatResizeHandle.style.zIndex = '26'
     this.floatResizeHandle.style.cursor = 'nwse-resize'
-    this.floatResizeHandle.style.width = '18px'
-    this.floatResizeHandle.style.height = '18px'
+    this.floatResizeHandle.style.width = '22px'
+    this.floatResizeHandle.style.height = '22px'
     this.floatResizeHandle.style.display = 'none'
     this.floatResizeHandle.style.touchAction = 'none'
     frame.appendChild(this.floatResizeHandle)
@@ -528,6 +528,11 @@ export class PanelLayoutController {
     // Real interactive controls (mode toggle, collapse, tab close glyph, url
     // input…) are never drag origins — everything else on the strip is.
     if (target.closest('button, input, a, [data-aionui-close]')) return
+    // Capture the pointer so the browser can't take over the gesture (HTML5
+    // drag / text selection / scroll) and fire pointercancel mid-drag — the
+    // historical "real browser drag never moves" bug.
+    try { this.previewCol.setPointerCapture(event.pointerId) } catch { /* best-effort */ }
+    event.preventDefault()
     const frame = this.frame
     const frameH = frame.clientHeight > 0 ? frame.clientHeight : frame.getBoundingClientRect().height
     const defaultH = Math.max(240, Math.min(Math.round(frameH * 0.6), 720))
@@ -573,6 +578,7 @@ export class PanelLayoutController {
     const onUp = (): void => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
       if (armed && this.previewCol !== null) {
         delete this.previewCol.dataset.aionuiFloatDragging
         this.previewCol.style.transition = 'left 180ms cubic-bezier(0.4, 0, 0.2, 1), top 180ms cubic-bezier(0.4, 0, 0.2, 1), width 180ms cubic-bezier(0.4, 0, 0.2, 1), height 180ms cubic-bezier(0.4, 0, 0.2, 1)'
@@ -615,8 +621,18 @@ export class PanelLayoutController {
         }
       }
     }
+    const onCancel = (): void => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      if (armed && this.previewCol !== null) {
+        delete this.previewCol.dataset.aionuiFloatDragging
+        this.previewCol.style.transition = 'left 180ms cubic-bezier(0.4, 0, 0.2, 1), top 180ms cubic-bezier(0.4, 0, 0.2, 1), width 180ms cubic-bezier(0.4, 0, 0.2, 1), height 180ms cubic-bezier(0.4, 0, 0.2, 1)'
+      }
+    }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
   }
 
   /** Resize the floating preview by its bottom-right corner: width follows the
@@ -625,6 +641,8 @@ export class PanelLayoutController {
   private startFloatResize(event: PointerEvent): void {
     const state = this.layout.getSnapshot()
     if (state.previewMode !== 'float' || !state.previewOpen || this.previewCol === null || this.frame === null) return
+    // Capture the pointer so the browser can't steal the gesture mid-drag.
+    try { (event.currentTarget as Element).setPointerCapture(event.pointerId) } catch { /* best-effort */ }
     event.preventDefault()
     event.stopPropagation()
     const frame = this.frame
@@ -668,14 +686,21 @@ export class PanelLayoutController {
     const onUp = (): void => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
       try {
         localStorage.setItem(KEY_FLOAT_SIZE, JSON.stringify(this.layout.getSnapshot().floatSize))
       } catch {
         // best-effort
       }
     }
+    const onCancel = (): void => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+    }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
   }
 
   /** Free-drag the focus tree popup (header = grab area). Position is clamped
@@ -898,8 +923,8 @@ export class PanelLayoutController {
         // The resize handle pins to the pane's bottom-right corner.
         if (this.floatResizeHandle !== null) {
           this.floatResizeHandle.style.display = width > 0 ? 'block' : 'none'
-          this.floatResizeHandle.style.left = `${x + width - 9}px`
-          this.floatResizeHandle.style.top = `${y + floatH - 9}px`
+          this.floatResizeHandle.style.left = `${x + width - 11}px`
+          this.floatResizeHandle.style.top = `${y + floatH - 11}px`
         }
       } else if (side) {
         this.previewCol.classList.remove('aionui-float-pane')
