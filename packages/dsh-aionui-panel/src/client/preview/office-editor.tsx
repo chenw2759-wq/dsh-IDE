@@ -121,23 +121,23 @@ export function OfficeToolbar({ exec, saveSelection, onSave, dirty }: {
       )}
       {tools.boldItalic && (
         <>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.boldItalic')} onMouseDown={(e) => { e.preventDefault(); exec('bold') }}>
+          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.boldItalic')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('bold') }}>
             <strong>B</strong>
           </button>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.boldItalic')} onMouseDown={(e) => { e.preventDefault(); exec('italic') }}>
+          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.boldItalic')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('italic') }}>
             <em>I</em>
           </button>
         </>
       )}
       {tools.align && (
         <>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); exec('justifyLeft') }}>左</button>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); exec('justifyCenter') }}>中</button>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); exec('justifyRight') }}>右</button>
+          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('justifyLeft') }}>左</button>
+          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('justifyCenter') }}>中</button>
+          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('justifyRight') }}>右</button>
         </>
       )}
       {tools.underline && (
-        <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.underline')} onMouseDown={(e) => { e.preventDefault(); exec('underline') }}>
+        <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.underline')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('underline') }}>
           <span style={{ textDecoration: 'underline' }}>U</span>
         </button>
       )}
@@ -149,14 +149,14 @@ export function OfficeToolbar({ exec, saveSelection, onSave, dirty }: {
       )}
       {tools.spacing && (
         <>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.spacing')} onMouseDown={(e) => { e.preventDefault(); exec('styleWithCSS'); toggleStyle('line-height', '1.2') }}>1.2</button>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.spacing')} onMouseDown={(e) => { e.preventDefault(); exec('styleWithCSS'); toggleStyle('line-height', '1.6') }}>1.6</button>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.spacing')} onMouseDown={(e) => { e.preventDefault(); exec('styleWithCSS'); toggleStyle('line-height', '2') }}>2.0</button>
+          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.spacing')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('styleWithCSS'); toggleStyle('line-height', '1.2') }}>1.2</button>
+          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.spacing')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('styleWithCSS'); toggleStyle('line-height', '1.6') }}>1.6</button>
+          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.spacing')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('styleWithCSS'); toggleStyle('line-height', '2') }}>2.0</button>
         </>
       )}
       {tools.margin && (
         <>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.margin')} onMouseDown={(e) => { e.preventDefault(); setMarginOpen(!marginOpen) }}>页边距</button>
+          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.margin')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); setMarginOpen(!marginOpen) }}>页边距</button>
           {marginOpen && (
             <span className={previewCss.officeMarginPop}>
               <input
@@ -222,6 +222,8 @@ export function EditableOffice({ html, contentType, onEdited, onSave, dirty }: {
     if (savedRange.current !== null) {
       sel.removeAllRanges()
       sel.addRange(savedRange.current)
+      // Consume once: never re-apply a stale snapshot to a later selection.
+      savedRange.current = null
     }
     el.focus()
   }

@@ -83,18 +83,18 @@ function VisualToolbar({ exec, saveSelection, onSave, dirty }: {
       )}
       {tools.boldItalic && (
         <>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.boldItalic')} onMouseDown={(e) => { e.preventDefault(); exec('bold') }}><strong>B</strong></button>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.boldItalic')} onMouseDown={(e) => { e.preventDefault(); exec('italic') }}><em>I</em></button>
+          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.boldItalic')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('bold') }}><strong>B</strong></button>
+          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.boldItalic')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('italic') }}><em>I</em></button>
         </>
       )}
       {tools.underline && (
-        <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.underline')} onMouseDown={(e) => { e.preventDefault(); exec('underline') }}><span style={{ textDecoration: 'underline' }}>U</span></button>
+        <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.underline')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('underline') }}><span style={{ textDecoration: 'underline' }}>U</span></button>
       )}
       {tools.align && (
         <>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); exec('justifyLeft') }}>左</button>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); exec('justifyCenter') }}>中</button>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); exec('justifyRight') }}>右</button>
+          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('justifyLeft') }}>左</button>
+          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('justifyCenter') }}>中</button>
+          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.align')} onMouseDown={(e) => { e.preventDefault(); saveSelection(); exec('justifyRight') }}>右</button>
         </>
       )}
       {tools.color && (
@@ -146,6 +146,9 @@ export function VisualEditor({ html, contentType, onSave }: {
     if (savedRange.current !== null) {
       sel.removeAllRanges()
       sel.addRange(savedRange.current)
+      // Consume once: never re-apply a stale snapshot to a later selection
+      // (the "after picking a color, bold/italic hit the old selection" bug).
+      savedRange.current = null
     }
     el.focus()
   }
@@ -225,6 +228,8 @@ function HtmlVisualEditor({ html, onSave }: { html: string; onSave: (editedHtml:
       if (savedRange.current !== null) {
         sel.removeAllRanges()
         sel.addRange(savedRange.current)
+        // Consume once (same stale-snapshot guard as the markdown surface).
+        savedRange.current = null
       }
     })
   }
