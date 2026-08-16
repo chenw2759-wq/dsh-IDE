@@ -1360,6 +1360,102 @@ html[style*="color-scheme: light"] {
   flex: 1 1 0;
 }
 
+/* ── Word-style color button (font color / highlight) ─────────────────── */
+
+/* The wrap holds the A-glyph + arrow + popover; relative so the popover
+   anchors below the button. */
+.colorButtonWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  height: 24px;
+}
+
+/* The "A" glyph: click applies the remembered color to the selection. The
+   bar under the A shows the current color (Word's exact affordance). */
+.colorButtonGlyph {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--aion-bg-3, #e5e6eb);
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+  border-right: none;
+  background: var(--aion-bg-1, #fff);
+  color: var(--aion-text-primary, #1f2329);
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.colorButtonGlyph:hover {
+  background: var(--aion-bg-3, #e5e6eb);
+}
+.colorButtonLetter {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  user-select: none;
+}
+.colorButtonBar {
+  width: 12px;
+  height: 2.5px;
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+/* The dropdown arrow. */
+.colorButtonArrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--aion-bg-3, #e5e6eb);
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+  background: var(--aion-bg-1, #fff);
+  color: var(--aion-text-secondary, #454d5f);
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.colorButtonArrow:hover {
+  background: var(--aion-bg-3, #e5e6eb);
+}
+
+/* The color palette popover: anchored below the button, grid of swatches. */
+.colorPalettePop {
+  position: absolute;
+  top: 28px;
+  left: 0;
+  z-index: 60;
+  display: grid;
+  grid-template-columns: repeat(8, 18px);
+  gap: 3px;
+  padding: 6px;
+  border: 1px solid var(--aion-bg-3, #e5e6eb);
+  border-radius: 8px;
+  background: var(--aion-bg-1, #fff);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+
+.colorPaletteSwatch {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.colorPaletteSwatch:hover {
+  outline: 2px solid var(--aion-primary, #165dff);
+  outline-offset: 1px;
+}
+
 /* Margin value popover (small inline input, not a modal). */
 .officeMarginPop {
   display: inline-flex;

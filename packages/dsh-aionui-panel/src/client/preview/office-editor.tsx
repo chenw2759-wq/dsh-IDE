@@ -24,6 +24,7 @@ import type { JSX } from 'react'
 import { readSettings } from '../settings.ts'
 import { t } from '../locales.ts'
 import previewCss from '../styles/preview.module.css'
+import { ColorButton } from './color-button.tsx'
 
 const FONTS = ['宋体', '黑体', '仿宋', '楷体', 'Arial', 'Times New Roman', 'Microsoft YaHei', 'Courier New', 'sans-serif', 'serif']
 const SIZES = [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48]
@@ -60,8 +61,15 @@ function toggleStyle(style: string, value: string): void {
   }
 }
 
-/** The office editing toolbar (tools hidden per settings). */
-export function OfficeToolbar({ onSave, dirty }: { onSave: () => void; dirty: boolean }): JSX.Element {
+/** The office editing toolbar (tools hidden per settings). `exec` applies a
+ *  command to the (restored) selection; `saveSelection` snapshots the selection
+ *  on mousedown of every focus-stealing control. */
+export function OfficeToolbar({ exec, saveSelection, onSave, dirty }: {
+  exec: (command: string, value?: string) => void
+  saveSelection: () => void
+  onSave: () => void
+  dirty: boolean
+}): JSX.Element {
   const tools = readSettings().editorTools
   const [font, setFont] = useState('')
   const [size, setSize] = useState('')
@@ -77,6 +85,7 @@ export function OfficeToolbar({ onSave, dirty }: { onSave: () => void; dirty: bo
     exec('fontSize', String(Math.max(1, Math.round(Number(value) / 3))))
   }
   const applyMargin = (): void => {
+    exec('styleWithCSS')
     toggleStyle('margin-left', marginValue.trim() === '' ? '' : marginValue.trim())
     setMarginOpen(false)
   }
@@ -90,6 +99,7 @@ export function OfficeToolbar({ onSave, dirty }: { onSave: () => void; dirty: bo
         <select
           className={previewCss.officeTool}
           value={font}
+          onMouseDown={saveSelection}
           onChange={(event) => applyFont(event.target.value)}
           title={t('settings.tool.font')}
         >
@@ -101,6 +111,7 @@ export function OfficeToolbar({ onSave, dirty }: { onSave: () => void; dirty: bo
         <select
           className={previewCss.officeTool}
           value={size}
+          onMouseDown={saveSelection}
           onChange={(event) => applySize(event.target.value)}
           title={t('settings.tool.fontSize')}
         >
@@ -131,28 +142,16 @@ export function OfficeToolbar({ onSave, dirty }: { onSave: () => void; dirty: bo
         </button>
       )}
       {tools.color && (
-        <input
-          type="color"
-          className={previewCss.officeColor}
-          title={t('settings.tool.color')}
-          defaultValue="#000000"
-          onChange={(event) => exec('foreColor', event.target.value)}
-        />
+        <ColorButton command="foreColor" label={t('settings.tool.color')} exec={exec} saveSelection={saveSelection} />
       )}
       {tools.highlight && (
-        <input
-          type="color"
-          className={previewCss.officeColor}
-          title={t('settings.tool.highlight')}
-          defaultValue="#fff176"
-          onChange={(event) => exec('hiliteColor', event.target.value)}
-        />
+        <ColorButton command="hiliteColor" label={t('settings.tool.highlight')} exec={exec} saveSelection={saveSelection} />
       )}
       {tools.spacing && (
         <>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.spacing')} onMouseDown={(e) => { e.preventDefault(); toggleStyle('line-height', '1.2') }}>1.2</button>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.spacing')} onMouseDown={(e) => { e.preventDefault(); toggleStyle('line-height', '1.6') }}>1.6</button>
-          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.spacing')} onMouseDown={(e) => { e.preventDefault(); toggleStyle('line-height', '2') }}>2.0</button>
+          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.spacing')} onMouseDown={(e) => { e.preventDefault(); exec('styleWithCSS'); toggleStyle('line-height', '1.2') }}>1.2</button>
+          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.spacing')} onMouseDown={(e) => { e.preventDefault(); exec('styleWithCSS'); toggleStyle('line-height', '1.6') }}>1.6</button>
+          <button type="button" className={previewCss.officeToolBtn} title={t('settings.tool.spacing')} onMouseDown={(e) => { e.preventDefault(); exec('styleWithCSS'); toggleStyle('line-height', '2') }}>2.0</button>
         </>
       )}
       {tools.margin && (
@@ -198,6 +197,7 @@ export function EditableOffice({ html, contentType, onEdited, onSave, dirty }: {
   dirty: boolean
 }): JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
+  const savedRange = useRef<Range | null>(null)
   const [ready, setReady] = useState(false)
 
   // Inject the initial HTML exactly once; afterwards the browser owns the DOM
@@ -209,9 +209,32 @@ export function EditableOffice({ html, contentType, onEdited, onSave, dirty }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [html])
 
+  const saveSelection = (): void => {
+    const sel = window.getSelection()
+    if (sel !== null && sel.rangeCount > 0) savedRange.current = sel.getRangeAt(0).cloneRange()
+  }
+
+  const restoreSelection = (): void => {
+    const el = ref.current
+    if (el === null) return
+    const sel = window.getSelection()
+    if (sel === null) return
+    if (savedRange.current !== null) {
+      sel.removeAllRanges()
+      sel.addRange(savedRange.current)
+    }
+    el.focus()
+  }
+
+  const execWithSelection = (command: string, value?: string): void => {
+    restoreSelection()
+    exec(command, value)
+    if (ref.current !== null) onEdited(ref.current.innerHTML)
+  }
+
   return (
     <div className={previewCss.officeEditWrap}>
-      <OfficeToolbar onSave={onSave} dirty={dirty} />
+      <OfficeToolbar exec={execWithSelection} saveSelection={saveSelection} onSave={onSave} dirty={dirty} />
       <div
         ref={ref}
         className={previewCss.officeScroll}

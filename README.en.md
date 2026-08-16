@@ -153,7 +153,7 @@ inline-HTML subset, so changing the text color no longer paints the background a
 survive saving. **HTML** edits the FULL document in a design-mode iframe (PPT-style rich editing: color
 / size / bold-italic / align / underline / highlight) — the original `<style>` and canvas background
 render as-is, and saving serializes the whole document (no more single-column body-fragment overlay).
-The toolbar provides bold / italic / underline / color / highlight / font / size / align / undo / redo.
+The toolbar provides bold / italic / underline / color / highlight / font / size / align / undo / redo. Text color and highlight are **Word-style buttons**: one click on the "A" applies the currently remembered color to the selection (a bar under the A shows the current color), and the small "▾" opens a palette where picking a swatch both remembers and applies it — no more multi-click color picking, and color can now be combined with bold/italic on the same selection.
 
 ### 🚀 SSH Remote Development (Local Brain, Remote Hands)
 

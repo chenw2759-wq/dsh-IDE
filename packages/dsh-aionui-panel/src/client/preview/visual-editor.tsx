@@ -31,6 +31,7 @@ import { readSettings } from '../settings.ts'
 import { t } from '../locales.ts'
 import previewCss from '../styles/preview.module.css'
 import { htmlToMarkdown } from './html-to-markdown.ts'
+import { ColorButton } from './color-button.tsx'
 
 const FONTS = ['宋体', '黑体', '仿宋', '楷体', 'Arial', 'Times New Roman', 'Microsoft YaHei', 'sans-serif', 'serif']
 const SIZES = [12, 14, 16, 18, 20, 24, 28, 32, 40, 48]
@@ -97,20 +98,10 @@ function VisualToolbar({ exec, saveSelection, onSave, dirty }: {
         </>
       )}
       {tools.color && (
-        <span className={previewCss.officeColorWrap} title={t('settings.tool.color')}>
-          <span className={previewCss.officeColorLabel}>字色</span>
-          <input type="color" className={previewCss.officeColor} defaultValue="#000000"
-            onMouseDown={saveSelection}
-            onChange={(e) => exec('foreColor', e.target.value)} />
-        </span>
+        <ColorButton command="foreColor" label={t('settings.tool.color')} exec={exec} saveSelection={saveSelection} />
       )}
       {tools.highlight && (
-        <span className={previewCss.officeColorWrap} title={t('settings.tool.highlight')}>
-          <span className={previewCss.officeColorLabel}>底色</span>
-          <input type="color" className={previewCss.officeColor} defaultValue="#fff176"
-            onMouseDown={saveSelection}
-            onChange={(e) => exec('hiliteColor', e.target.value)} />
-        </span>
+        <ColorButton command="hiliteColor" label={t('settings.tool.highlight')} exec={exec} saveSelection={saveSelection} />
       )}
       <span className={previewCss.officeToolbarSpacer} />
       <button type="button" className={`${previewCss.officeToolBtn} ${previewCss.officeSave}`} disabled={!dirty} onClick={onSave}>{t('preview.save')}</button>
