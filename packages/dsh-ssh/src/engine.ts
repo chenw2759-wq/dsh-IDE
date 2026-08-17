@@ -1,7 +1,7 @@
-/**
+﻿/**
  * The SSH engine: a per-alias persistent connection pool (ssh2) with
  * multi-hop jump support, command execution, PTY shells, SFTP transfers,
- * local port-forward tunnels and cluster execution — the DSH counterpart of
+ * local port-forward tunnels and cluster execution 鈥?the DSH counterpart of
  * ssh-skill's daemon + scripts, living entirely in the host process.
  */
 
@@ -154,7 +154,7 @@ function appendOutput(target: { text: string; truncated: boolean }, chunk: Buffe
     let cut = chunk.toString('utf8').slice(0, maxBytes - target.text.length)
     // Never split a surrogate pair at the cut boundary.
     if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1)
-    target.text += cut + '…[output truncated]'
+    target.text += cut + '鈥output truncated]'
     target.truncated = true
     return
   }
@@ -185,6 +185,15 @@ export class SshEngine {
   private readonly opts: Required<EngineOptions>
   private readonly pool = new Map<string, PoolRecord>()
   private readonly tunnels = new Map<string, TunnelRecord>()
+  /**
+   * One cached SFTP subsystem channel per live client. `Client.sftp()` opens a
+   * NEW subsystem channel on every call and OpenSSH caps open sessions per
+   * connection (MaxSessions, default 10) 鈥?reopening SFTP per operation lets
+   * channels pile up on the pooled long-lived connection until listing/reading
+   * fails intermittently. Caching one channel per client fixes that and makes
+   * a broken connection drop the cache with it (see disposeRecord).
+   */
+  private readonly sftpChannels = new Map<Client, Promise<import('ssh2').SFTPWrapper>>()
   private sweepTimer: NodeJS.Timeout | undefined
   private nextTunnelId = 1
 
@@ -239,6 +248,15 @@ export class SshEngine {
         const result = await fn(record.client)
         record.idleAt = Date.now()
         return result
+      } catch (error) {
+        lastError = error
+        // A mid-flight failure on a pooled connection usually means the
+        // connection died silently between operations (the 'error'/'close'
+        // event may not have fired yet). Drop the record 鈥?but only when no
+        // other operation is running on it 鈥?so the next attempt reconnects.
+        if (record.broken || record.inFlight === 1) {
+          this.disposeRecord(alias, record)
+        }
       } finally {
         record.inFlight -= 1
       }
@@ -260,7 +278,7 @@ export class SshEngine {
       const hop = this.store.find(hopAlias)
       if (hop === undefined) {
         for (const client of hops) client.end()
-        throw new Error(`proxyJump alias '${hopAlias}' not found — create it first`)
+        throw new Error(`proxyJump alias '${hopAlias}' not found 鈥?create it first`)
       }
       const hopClient = await connectClient(buildConnectConfig(hop, sock))
       hops.push(hopClient)
@@ -305,7 +323,7 @@ export class SshEngine {
 
   private async doAcquire(alias: string): Promise<PoolRecord> {
     const entry = this.store.find(alias)
-    if (entry === undefined) throw new Error(`alias '${alias}' not found — add it first`)
+    if (entry === undefined) throw new Error(`alias '${alias}' not found 鈥?add it first`)
     const { client, hops } = await this.connectChain(entry)
     const record: PoolRecord = { client, hops, idleAt: Date.now(), pinned: false, broken: false, inFlight: 0 }
     client.on('error', () => { record.broken = true })
@@ -317,13 +335,14 @@ export class SshEngine {
   /**
    * Tear down one alias's record. When `record` is given and no longer the
    * pooled record for the alias (a concurrent acquire replaced it), nothing
-   * is torn down — the connection belongs to someone else now.
+   * is torn down 鈥?the connection belongs to someone else now.
    */
   private disposeRecord(alias: string, record?: PoolRecord): void {
     const current = this.pool.get(alias)
     if (record !== undefined && current !== record) return
     if (current === undefined) return
     this.pool.delete(alias)
+    this.sftpChannels.delete(current.client)
     try { current.client.end() } catch { /* already closed */ }
     for (const hop of current.hops) {
       try { hop.end() } catch { /* already closed */ }
@@ -452,7 +471,7 @@ export class SshEngine {
   /** Open a PTY shell session for the web terminal (standalone connection). */
   async openShell(alias: string, size: { cols: number; rows: number }): Promise<ShellSession> {
     const entry = this.store.find(alias)
-    if (entry === undefined) throw new Error(`alias '${alias}' not found — add it first`)
+    if (entry === undefined) throw new Error(`alias '${alias}' not found 鈥?add it first`)
     // The shell is a long-lived exclusive stream: use its own connection so
     // closing it can never tear down a pooled exec/tunnel sharing the alias.
     const { client, hops } = await this.connectChain(entry)
@@ -503,7 +522,7 @@ export class SshEngine {
    */
   async openExec(alias: string, command: string): Promise<ExecSession> {
     const entry = this.store.find(alias)
-    if (entry === undefined) throw new Error(`alias '${alias}' not found — add it first`)
+    if (entry === undefined) throw new Error(`alias '${alias}' not found 鈥?add it first`)
     const { client, hops } = await this.connectChain(entry)
     return await new Promise<ExecSession>((resolve, reject) => {
       client.exec(command, (error, stream) => {
@@ -563,11 +582,11 @@ export class SshEngine {
     const local = resolvePath(localPath)
     if (!existsSync(local)) throw new Error(`local path not found: '${localPath}'`)
     return this.withClient(alias, async (client) => {
-      const sftp = await this.sftp(client)
+      const sftp = await this.sftpFor(client)
       const stat = statSync(local)
       let files: string[]
       if (stat.isDirectory()) {
-        if (!recursive) throw new Error(`'${localPath}' is a directory — enable recursive upload`)
+        if (!recursive) throw new Error(`'${localPath}' is a directory 鈥?enable recursive upload`)
         files = walkLocalDir(local)
         await this.ensureRemoteDir(sftp, remotePath)
       } else {
@@ -590,12 +609,12 @@ export class SshEngine {
   /** Download one remote file to a local path. */
   async download(alias: string, remotePath: string, localPath: string, onProgress?: (progress: TransferProgress) => void): Promise<{ bytes: number }> {
     return this.withClient(alias, async (client) => {
-      const sftp = await this.sftp(client)
+      const sftp = await this.sftpFor(client)
       const stat = await new Promise<{ isDirectory: () => boolean }>((resolve, reject) => {
         sftp.stat(remotePath, (error, stats) => error !== undefined ? reject(error) : resolve(stats))
       })
       if (stat.isDirectory()) {
-        throw new Error(`'${remotePath}' is a directory — directory download is not supported yet (download individual files)`)
+        throw new Error(`'${remotePath}' is a directory 鈥?directory download is not supported yet (download individual files)`)
       }
       const local = resolvePath(localPath)
       if (!existsSync(dirname(local))) mkdirSync(dirname(local), { recursive: true })
@@ -607,7 +626,7 @@ export class SshEngine {
   /** List a remote directory (file browser). */
   async ls(alias: string, path: string): Promise<import('./protocol.ts').RemoteDirEntry[]> {
     return this.withClient(alias, async (client) => {
-      const sftp = await this.sftp(client)
+      const sftp = await this.sftpFor(client)
       return await new Promise((resolve, reject) => {
         sftp.readdir(path, (error, list) => {
           if (error !== undefined) {
@@ -657,7 +676,7 @@ export class SshEngine {
   /** Stat one remote path (file browser / conflict checks). */
   async stat(alias: string, remotePath: string): Promise<{ type: 'dir' | 'file' | 'other'; size: number; mtimeMs: number; mode: number }> {
     return this.withClient(alias, async (client) => {
-      const sftp = await this.sftp(client)
+      const sftp = await this.sftpFor(client)
       const attrs = await this.sftpStat(sftp, remotePath)
       return {
         type: attrs.isDirectory() ? 'dir' : attrs.isFile() ? 'file' : 'other',
@@ -674,7 +693,7 @@ export class SshEngine {
    */
   async lstat(alias: string, remotePath: string): Promise<{ type: 'file' | 'directory' | 'symlink' | 'other'; size: number; mtimeMs: number; mode: number } | undefined> {
     return this.withClient(alias, async (client) => {
-      const sftp = await this.sftp(client)
+      const sftp = await this.sftpFor(client)
       try {
         const attrs = await new Promise<import('ssh2').Stats>((resolve, reject) => {
           sftp.lstat(remotePath, (error, stats) => error !== undefined ? reject(error) : resolve(stats))
@@ -700,7 +719,7 @@ export class SshEngine {
    */
   async readStream(alias: string, remotePath: string): Promise<import('node:stream').Readable> {
     return this.withClient(alias, async (client) => {
-      const sftp = await this.sftp(client)
+      const sftp = await this.sftpFor(client)
       const stream = sftp.createReadStream(remotePath) as unknown as import('node:stream').Readable
       return stream
     })
@@ -712,7 +731,7 @@ export class SshEngine {
    */
   async readFile(alias: string, remotePath: string): Promise<{ content: Buffer; mtime: number; size: number }> {
     return this.withClient(alias, async (client) => {
-      const sftp = await this.sftp(client)
+      const sftp = await this.sftpFor(client)
       const attrs = await this.sftpStat(sftp, remotePath)
       if (attrs.isDirectory()) throw new Error(`'${remotePath}' is a directory`)
       const chunks: Buffer[] = []
@@ -734,7 +753,7 @@ export class SshEngine {
    */
   async writeFile(alias: string, remotePath: string, content: Buffer, expectedMtime?: number): Promise<{ mtime: number }> {
     return this.withClient(alias, async (client) => {
-      const sftp = await this.sftp(client)
+      const sftp = await this.sftpFor(client)
       await this.ensureRemoteDir(sftp, dirname(remotePath))
       if (expectedMtime !== undefined) {
         const attrs = await this.sftpStat(sftp, remotePath)
@@ -757,7 +776,7 @@ export class SshEngine {
   /** Create a remote directory chain (mkdir -p semantics). */
   async mkdir(alias: string, remotePath: string): Promise<void> {
     return this.withClient(alias, async (client) => {
-      const sftp = await this.sftp(client)
+      const sftp = await this.sftpFor(client)
       await this.ensureRemoteDir(sftp, remotePath)
     })
   }
@@ -768,7 +787,7 @@ export class SshEngine {
    */
   async rm(alias: string, remotePath: string, recursive = false): Promise<void> {
     return this.withClient(alias, async (client) => {
-      const sftp = await this.sftp(client)
+      const sftp = await this.sftpFor(client)
       const attrs = await this.sftpStat(sftp, remotePath)
       if (!attrs.isDirectory()) {
         await new Promise<void>((resolve, reject) => {
@@ -776,7 +795,7 @@ export class SshEngine {
         })
         return
       }
-      if (!recursive) throw new Error(`'${remotePath}' is a directory — pass recursive: true`)
+      if (!recursive) throw new Error(`'${remotePath}' is a directory 鈥?pass recursive: true`)
       const remove = async (dir: string): Promise<void> => {
         const list = await new Promise<Array<{ filename: string; attrs: { isDirectory(): boolean } }>>((resolve, reject) => {
           sftp.readdir(dir, (error, entries) => error !== undefined ? reject(error) : resolve(entries))
@@ -802,7 +821,7 @@ export class SshEngine {
   /** Rename / move a remote path (mv semantics, same filesystem). */
   async rename(alias: string, fromPath: string, toPath: string): Promise<void> {
     return this.withClient(alias, async (client) => {
-      const sftp = await this.sftp(client)
+      const sftp = await this.sftpFor(client)
       await new Promise<void>((resolve, reject) => {
         sftp.rename(fromPath, toPath, (error) => error !== undefined ? reject(error) : resolve())
       })
@@ -816,10 +835,30 @@ export class SshEngine {
     })
   }
 
-  private sftp(client: Client): Promise<import('ssh2').SFTPWrapper> {
-    return new Promise((resolve, reject) => {
-      client.sftp((error, sftp) => error !== undefined ? reject(error) : resolve(sftp))
+  /**
+   * The (cached) SFTP channel for a pooled client. `Client.sftp()` opens a new
+   * subsystem channel per call, so this memoizes one channel per live client;
+   * when the channel closes the cache entry is dropped so the next call opens
+   * SFTP on the replacement connection. Failed opens are also evicted so a
+   * transient channel failure can be retried.
+   */
+  private sftpFor(client: Client): Promise<import('ssh2').SFTPWrapper> {
+    const cached = this.sftpChannels.get(client)
+    if (cached !== undefined) return cached
+    const pending = new Promise<import('ssh2').SFTPWrapper>((resolve, reject) => {
+      client.sftp((error, sftp) => {
+        if (error !== undefined) {
+          this.sftpChannels.delete(client)
+          reject(error)
+          return
+        }
+        sftp.on('close', () => { this.sftpChannels.delete(client) })
+        sftp.on('error', () => { this.sftpChannels.delete(client) })
+        resolve(sftp)
+      })
     })
+    this.sftpChannels.set(client, pending)
+    return pending
   }
 
   /** Create a remote directory chain (stat-then-mkdir per segment). */
@@ -838,7 +877,7 @@ export class SshEngine {
             return
           }
           // Statting a missing path fails; mkdir it (idempotent because the
-          // stat check runs first — some sftp servers throw on EEXIST).
+          // stat check runs first 鈥?some sftp servers throw on EEXIST).
           sftp.mkdir(current, (mkdirError) => {
             if (mkdirError !== undefined) {
               reject(mkdirError)
@@ -928,7 +967,7 @@ export class SshEngine {
       throw new Error('localPort must be an integer in 1..65535')
     }
     const entry = this.store.find(alias)
-    if (entry === undefined) throw new Error(`alias '${alias}' not found — add it first`)
+    if (entry === undefined) throw new Error(`alias '${alias}' not found 鈥?add it first`)
     const remoteHost = options.remoteHost ?? '127.0.0.1'
     const id = `tun-${this.nextTunnelId++}`
     const info: TunnelInfo = {

@@ -7,6 +7,7 @@
 ### 已完成（按实施阶段）
 
 **修复（视觉编辑 / Word 编辑 / 斑马纹 / 会话隔离）**
+- **SSH 远程文件树子目录经常加载不出来的根因修复**：`SshEngine` 每次文件操作（ls/readFile/stat/upload…）都调用 `client.sftp()` 开一个**新的 SFTP subsystem channel** 且从不关闭，而 OpenSSH 服务器默认 `MaxSessions=10` 限制每连接并发会话数——长连接池复用下未关闭的 SFTP channel 持续累积，第 11 个起全部报 `Channel open failure: open failed`，于是远程目录列举/读取**间歇性失败**（表现为「展开子目录经常加载不出来」）。修复：给每个池化连接**缓存复用同一个 SFTP channel**（`sftpFor()`），连接断开/关闭时自动失效缓存以便重连后重建；顺带修好 `withClient` 缺失 `catch` 导致的重连逻辑从未生效的问题（连接中途死掉时先释放该连接记录、下轮重连）。真机验证：修复前模拟（每次开新 channel 不关）在第 11 个 channel 起失败（10 成功 / 8 失败）；修复后同一连接连续 18 次 `ls` **18/18 全部成功**。
 - **集成终端空白修复**：终端面板改为从主 React 树用 `createPortal` 渲染进 `[data-aionui-terminal-host]`（此前用独立 React root 挂载，存在挂载竞态导致宿主只有黑底、面板内容不渲染）；宿主加不透明背景、提高 z-index。
 - **docx 预览渲染图片与底纹**：`w:drawing/a:blip` 内联图片现在经 `word/_rels/document.xml.rels` 解析并内联为 data URL `<img>`；`w:shd w:fill` 段落/文本底纹渲染为 `background-color`。图表、嵌入对象、页眉页脚等复杂结构暂未支持（已知限制）。
 - **docx 编辑保存后整段格式全部消失的根因修复**：`rebuildDocx` 的 `walk` 原来只在「叶子节点」用当前元素自身 style 生成 `w:rPr`，遇到 `<span style="…">文字</span>` 会直接递归进文本子节点、把样式丢弃，导致重建出的 `<w:r>` 没有 `<w:rPr>`——粗体/斜体/下划线/颜色/字号/字体/高亮编辑保存后只剩文字。修复：`walk` 改为把每个元素自身的 `styleToRPr` 向下传递到其**直接文本子节点**（自身无样式则继承父级），保证每个 run 都带上正确的 `<w:rPr>`。同时 `styleToRPr` 的属性匹配正则加 `(?:^|;)` 锚点，避免 `color` 误匹配到 `background-color`。新增 round-trip 测试：预览 HTML → `rebuildDocx` 重建，断言 `<w:b/>`/`<w:color w:val="FF0000"/>`/`<w:sz w:val="32"/>` 全部保留。
