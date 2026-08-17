@@ -1,4 +1,4 @@
-﻿/**
+/**
  * The SSH engine: a per-alias persistent connection pool (ssh2) with
  * multi-hop jump support, command execution, PTY shells, SFTP transfers,
  * local port-forward tunnels and cluster execution 鈥?the DSH counterpart of
@@ -39,6 +39,18 @@ const DEFAULTS: Required<EngineOptions> = {
   defaultMaxWorkers: 8,
   sftpConcurrency: 8,
 }
+
+/** SFTP operations must never leave the file tree spinning forever: fail the
+ *  request after this budget so a stalled channel (half-dead connection,
+ *  unresponsive server) errors out instead of hanging the GUI. */
+const SFTP_OP_TIMEOUT_MS = 15_000
+/** Read whole remote files with a generous budget (slow links can take a
+ *  while to stream large files). */
+const SFTP_READ_TIMEOUT_MS = 60_000
+/** Symlink stat batch width — parallelized so a dir full of links (conda /
+ *  venv bin, node_modules/.bin) costs a handful of round-trips, not N. ssh2's
+ *  SFTP window pipelines requests, so one batch ≈ one round-trip. */
+const SYMLINK_STAT_BATCH = 64
 
 /** One pooled connection record. */
 interface PoolRecord {
@@ -623,61 +635,67 @@ export class SshEngine {
     })
   }
 
-  /** List a remote directory (file browser). */
+  /** List a remote directory (file browser). Bounded by a timeout so a
+   *  stalled SFTP request fails instead of leaving the file tree spinning. */
   async ls(alias: string, path: string): Promise<import('./protocol.ts').RemoteDirEntry[]> {
     return this.withClient(alias, async (client) => {
       const sftp = await this.sftpFor(client)
-      return await new Promise((resolve, reject) => {
-        sftp.readdir(path, (error, list) => {
-          if (error !== undefined) {
-            reject(error)
-            return
-          }
-          void this.classifyEntries(sftp, path, list).then(resolve, reject)
-        })
-      })
+      return this.withTimeout(
+        (async () => {
+          const list = await new Promise<Array<{ filename: string; attrs: import('ssh2').Stats }>>((resolve, reject) => {
+            sftp.readdir(path, (error, items) => error !== undefined ? reject(error) : resolve(items))
+          })
+          return this.classifyEntries(sftp, path, list)
+        })(),
+        SFTP_OP_TIMEOUT_MS,
+        `remote ls timed out after ${SFTP_OP_TIMEOUT_MS}ms: ${path}`,
+      )
     })
   }
 
   /**
    * Classify readdir entries, following symlinks so a link to a directory
    * (e.g. AutoDL's /root/autodl-tmp) lists as a directory instead of 'other'.
+   * Symlinks are stat'd in PARALLEL batches: serializing them turns a conda /
+   * venv bin full of links into N round-trips (seconds to tens of seconds on a
+   * slow link) — batching keeps it to a handful of round-trips. The whole pass
+   * is bounded by ls()'s timeout.
    */
   private async classifyEntries(
     sftp: import('ssh2').SFTPWrapper,
     dirPath: string,
     list: Array<{ filename: string; attrs: import('ssh2').Stats }>,
   ): Promise<import('./protocol.ts').RemoteDirEntry[]> {
-    const entries: import('./protocol.ts').RemoteDirEntry[] = []
-    for (const item of list) {
-      let type: 'dir' | 'file' | 'other' = item.attrs.isDirectory() ? 'dir' : item.attrs.isFile() ? 'file' : 'other'
-      if (type === 'other' && item.attrs.isSymbolicLink()) {
-        // Follow the final symlink once to learn its real kind.
+    const resolved = new Array<'dir' | 'file' | 'other' | null>(list.length).fill(null)
+    const linkIndexes = list
+      .map((item, index) => (item.attrs.isSymbolicLink() ? index : -1))
+      .filter((index) => index >= 0)
+    const base = dirPath.replace(/\/+$/, '')
+    for (let start = 0; start < linkIndexes.length; start += SYMLINK_STAT_BATCH) {
+      const batch = linkIndexes.slice(start, start + SYMLINK_STAT_BATCH)
+      await Promise.all(batch.map(async (index) => {
         try {
-          const target = await new Promise<import('ssh2').Stats>((res, rej) => {
-            sftp.stat(`${dirPath.replace(/\/+$/, '')}/${item.filename}`, (statError, stats) => statError !== undefined ? rej(statError) : res(stats))
+          const stats = await new Promise<import('ssh2').Stats>((res, rej) => {
+            sftp.stat(`${base}/${list[index].filename}`, (statError, stats) => statError !== undefined ? rej(statError) : res(stats))
           })
-          type = target.isDirectory() ? 'dir' : target.isFile() ? 'file' : 'other'
+          resolved[index] = stats.isDirectory() ? 'dir' : stats.isFile() ? 'file' : 'other'
         } catch {
-          // dangling link: keep 'other'
+          resolved[index] = 'other' // dangling link
         }
-      }
-      entries.push({
-        name: item.filename,
-        type,
-        size: item.attrs.size,
-        mtimeMs: item.attrs.mtime * 1000,
-        mode: item.attrs.mode,
-      })
+      }))
     }
-    return entries
+    return list.map((item, index): import('./protocol.ts').RemoteDirEntry => {
+      let type: 'dir' | 'file' | 'other' = item.attrs.isDirectory() ? 'dir' : item.attrs.isFile() ? 'file' : 'other'
+      if (type === 'other' && item.attrs.isSymbolicLink()) type = resolved[index] ?? 'other'
+      return { name: item.filename, type, size: item.attrs.size, mtimeMs: item.attrs.mtime * 1000, mode: item.attrs.mode }
+    })
   }
 
-  /** Stat one remote path (file browser / conflict checks). */
+  /** Stat one remote path (file browser / conflict checks). Bounded by a timeout. */
   async stat(alias: string, remotePath: string): Promise<{ type: 'dir' | 'file' | 'other'; size: number; mtimeMs: number; mode: number }> {
     return this.withClient(alias, async (client) => {
       const sftp = await this.sftpFor(client)
-      const attrs = await this.sftpStat(sftp, remotePath)
+      const attrs = await this.withTimeout(this.sftpStat(sftp, remotePath), SFTP_OP_TIMEOUT_MS, `remote stat timed out after ${SFTP_OP_TIMEOUT_MS}ms: ${remotePath}`)
       return {
         type: attrs.isDirectory() ? 'dir' : attrs.isFile() ? 'file' : 'other',
         size: attrs.size,
@@ -732,15 +750,15 @@ export class SshEngine {
   async readFile(alias: string, remotePath: string): Promise<{ content: Buffer; mtime: number; size: number }> {
     return this.withClient(alias, async (client) => {
       const sftp = await this.sftpFor(client)
-      const attrs = await this.sftpStat(sftp, remotePath)
+      const attrs = await this.withTimeout(this.sftpStat(sftp, remotePath), SFTP_OP_TIMEOUT_MS, `remote stat timed out after ${SFTP_OP_TIMEOUT_MS}ms: ${remotePath}`)
       if (attrs.isDirectory()) throw new Error(`'${remotePath}' is a directory`)
       const chunks: Buffer[] = []
-      await new Promise<void>((resolve, reject) => {
+      await this.withTimeout(new Promise<void>((resolve, reject) => {
         const stream = sftp.createReadStream(remotePath)
         stream.on('data', (chunk: Buffer) => { chunks.push(chunk) })
         stream.on('error', (error: Error) => reject(error))
         stream.on('end', () => resolve())
-      })
+      }), SFTP_READ_TIMEOUT_MS, `remote read timed out after ${SFTP_READ_TIMEOUT_MS}ms: ${remotePath}`)
       return { content: Buffer.concat(chunks), mtime: attrs.mtime * 1000, size: attrs.size }
     })
   }
@@ -825,6 +843,18 @@ export class SshEngine {
       await new Promise<void>((resolve, reject) => {
         sftp.rename(fromPath, toPath, (error) => error !== undefined ? reject(error) : resolve())
       })
+    })
+  }
+
+  /** Reject a promise after `ms` (unref'd so it never keeps the process alive). */
+  private withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(message)), ms)
+      timer.unref?.()
+      promise.then(
+        (value) => { clearTimeout(timer); resolve(value) },
+        (error) => { clearTimeout(timer); reject(error) },
+      )
     })
   }
 
