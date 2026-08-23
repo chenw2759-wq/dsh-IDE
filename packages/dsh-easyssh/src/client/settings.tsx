@@ -76,15 +76,33 @@ export function HostSettingsPage(props: HostSettingsPageProps): ReactElement {
     setBusy(true)
     setMessage(null)
     try {
-      await props.hostsApi.create({
-        alias,
-        host,
-        port,
-        user,
-        auth: form.auth?.kind === 'key'
-          ? { kind: 'key', keyPath: form.auth.keyPath, passphrase: form.auth.passphrase }
-          : { kind: 'password', password: form.auth?.password ?? '' },
-      })
+      const auth = form.auth
+      if (editingAlias !== null) {
+        // Edit is a partial PATCH: only resend auth when the user actually
+        // entered a new secret, so an untouched password/key keeps the
+        // stored one (the host rejects an empty password).
+        const hasNewSecret = auth?.kind === 'password'
+          ? (auth.password ?? '') !== ''
+          : auth?.kind === 'key'
+            ? (auth.keyPath ?? '').trim() !== ''
+            : false
+        await props.hostsApi.update(editingAlias, {
+          host,
+          port,
+          user,
+          ...(hasNewSecret ? { auth } : {}),
+        })
+      } else {
+        await props.hostsApi.create({
+          alias,
+          host,
+          port,
+          user,
+          auth: auth?.kind === 'key'
+            ? { kind: 'key', keyPath: auth.keyPath, passphrase: auth.passphrase }
+            : { kind: 'password', password: auth?.password ?? '' },
+        })
+      }
       setForm(EMPTY_FORM)
       setEditingAlias(null)
       setMessage({ kind: 'info', text: tt('panel.saved') })
@@ -115,11 +133,7 @@ export function HostSettingsPage(props: HostSettingsPageProps): ReactElement {
     setBusy(true)
     setMessage(null)
     try {
-      const response = await fetch(`/api/dsh-ssh/hosts?alias=${encodeURIComponent(alias)}`, { method: 'DELETE' })
-      if (!response.ok) {
-        const body = await response.json().catch(() => null)
-        throw new Error((body as { error?: string } | null)?.error ?? `HTTP ${response.status}`)
-      }
+      await props.hostsApi.remove(alias)
       if (state.mode === 'remote' && state.alias === alias) await props.mode.setLocal()
       setMessage({ kind: 'info', text: `${alias} ${tt('panel.close')}` })
       await refresh()

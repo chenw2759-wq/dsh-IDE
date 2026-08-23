@@ -138,3 +138,67 @@
   font-size: 11px;
   color: var(--aion-text-tertiary, #86909c);
 }
+
+/* Multi-host device picker (top of the dialog, before the create form). */
+.hostPicker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.hostPickerTitle {
+  font-size: 12px;
+  color: var(--aion-text-secondary, #454d5f);
+}
+
+.hostRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--aion-border-base, #e5e6eb);
+  border-radius: 8px;
+  background: var(--aion-bg-2, #f2f3f5);
+}
+
+.hostAlias {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--aion-text-primary, #000);
+  white-space: nowrap;
+}
+
+.hostMeta {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--aion-text-tertiary, #86909c);
+}
+
+.hostEnter {
+  flex: none;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+.hostRowActions {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+
+.danger {
+  background: var(--aion-danger, #f53f3f);
+  border-color: var(--aion-danger, #f53f3f);
+  color: #fff;
+}
+
+.hostPickerDivider {
+  height: 1px;
+  background: var(--aion-border-base, #e5e6eb);
+  margin-top: 4px;
+}

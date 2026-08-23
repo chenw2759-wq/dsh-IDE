@@ -29,7 +29,7 @@ SSH 模式下的远程执行走**两条轨**：
 | 能力 | 说明 |
 | --- | --- |
 | 右上角按钮 | `conversation.session.header.utilities` 槽位（order -10 / -9，位于 session log 左侧） |
-| 配置对话框 | 别名 / 主机 / 端口 / 用户名 / 密码或密钥（含 passphrase）/ 远程根（默认 `~`）；保存进 dsh-ssh 共享主机配置并测试连接 |
+| 配置对话框 | 别名 / 主机 / 端口 / 用户名 / 密码或密钥（含 passphrase）/ 远程根（默认 `~`）；保存进 dsh-ssh 共享主机配置并测试连接；已配置主机列表支持**一键进入 / 编辑 / 删除** |
 | SSH 模式 | 模式状态机 local ⇄ remote@alias（宿主进程单例）；远程根经连接解析为绝对路径并作为路径 gate 前缀 |
 | 左侧文件树面板 | 在 `[data-dsh-frame]` grid 前插一列（与 aionui 右侧面板协同，互不覆盖）；懒加载树 / 文件名搜索（跳过 .git、node_modules）/ 文本预览与编辑 / 保存带 mtime 冲突检测 / 宽度与折叠按项目持久化 |
 | 接缝切换 | `ctx.fs` / `ctx.subprocess` 模式路由门面（本地 = 沙箱化原实现；远程 = SFTP/SSH 实现，含原子写、版本、CRLF、流式输出、PTY 终端） |

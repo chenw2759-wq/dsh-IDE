@@ -6,9 +6,9 @@
  * modal slot for external plugins).
  */
 import { createRoot } from 'react-dom/client'
-import { useState, type ReactElement } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import type { ModeState } from './state.ts'
-import type { SshHostsApi, WorkspaceApi } from './api.ts'
+import type { SshHostsApi, SshHostSummary, WorkspaceApi } from './api.ts'
 import { tt } from './text.ts'
 import css from './workspace.module.css'
 
@@ -65,9 +65,77 @@ export function ConfigDialog(props: {
   const [form, setForm] = useState<DialogState>(INITIAL)
   const [phase, setPhase] = useState<Phase>({ kind: 'editing' })
   const [savedAlias, setSavedAlias] = useState<string | undefined>(undefined)
+  const [editingAlias, setEditingAlias] = useState<string | null>(null)
+  const [hosts, setHosts] = useState<SshHostSummary[] | null>(null)
+  const [picking, setPicking] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  // Load the saved host list once (the multi-host device picker).
+  useEffect(() => {
+    let alive = true
+    void props.hostsApi.list().then((list) => {
+      if (alive) setHosts(list)
+    }).catch(() => {
+      if (alive) setHosts([])
+    })
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const set = <K extends keyof DialogState>(key: K, value: DialogState[K]): void => {
     setForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  /** Enter SSH mode on an EXISTING host (multi-host picker, one click). */
+  const enterExisting = async (alias: string): Promise<void> => {
+    setPicking(alias)
+    try {
+      await props.mode.setRemote(alias)
+      props.onClose()
+    } catch (error) {
+      setPicking(null)
+      setPhase({ kind: 'failed', message: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  /** Fill the form from an existing host for editing (secrets left blank so
+   *  an untouched auth keeps the stored one). */
+  const startEdit = (host: SshHostSummary): void => {
+    setEditingAlias(host.alias)
+    setForm({
+      alias: host.alias,
+      host: host.host,
+      port: String(host.port),
+      user: host.user,
+      authKind: host.auth,
+      password: '',
+      keyPath: '',
+      passphrase: '',
+      remoteRoot: '',
+    })
+    setPhase({ kind: 'editing' })
+  }
+
+  /** Delete an existing host; exits SSH mode first when it is the active one. */
+  const removeHost = async (alias: string): Promise<void> => {
+    setDeleting(alias)
+    try {
+      await props.hostsApi.remove(alias)
+      const mode = props.mode.getSnapshot()
+      if (mode.mode === 'remote' && mode.alias === alias) await props.mode.setLocal()
+      setHosts((prev) => (prev === null ? prev : prev.filter((host) => host.alias !== alias)))
+      if (editingAlias === alias) {
+        setEditingAlias(null)
+        setForm(INITIAL)
+        setSavedAlias(undefined)
+      }
+    } catch (error) {
+      setPhase({ kind: 'failed', message: error instanceof Error ? error.message : String(error) })
+    } finally {
+      setDeleting(null)
+    }
   }
 
   const saveAndTest = async (): Promise<void> => {
@@ -81,17 +149,27 @@ export function ConfigDialog(props: {
       return
     }
     try {
-      const summary = await props.hostsApi.create({
-        alias,
-        host,
-        port,
-        user,
-        auth: form.authKind === 'password'
-          ? { kind: 'password', password: form.password }
-          : { kind: 'key', keyPath: form.keyPath.trim(), passphrase: form.passphrase === '' ? undefined : form.passphrase },
-      })
-      setSavedAlias(summary.alias)
-      const result = await props.hostsApi.test(summary.alias)
+      const auth = form.authKind === 'password'
+        ? { kind: 'password' as const, password: form.password }
+        : { kind: 'key' as const, keyPath: form.keyPath.trim(), passphrase: form.passphrase === '' ? undefined : form.passphrase }
+      if (editingAlias !== null) {
+        // Partial PATCH: only resend auth when a new secret was entered, so
+        // an untouched password/key stays stored (the host rejects empty).
+        const hasNewSecret = form.authKind === 'password'
+          ? form.password !== ''
+          : form.keyPath.trim() !== ''
+        const summary = await props.hostsApi.update(editingAlias, {
+          host,
+          port,
+          user,
+          ...(hasNewSecret ? { auth } : {}),
+        })
+        setSavedAlias(summary.alias)
+      } else {
+        const summary = await props.hostsApi.create({ alias, host, port, user, auth })
+        setSavedAlias(summary.alias)
+      }
+      const result = await props.hostsApi.test(alias)
       if (result.ok) {
         setPhase({ kind: 'ready', latencyMs: result.latencyMs })
       } else {
@@ -119,6 +197,45 @@ export function ConfigDialog(props: {
           <strong>{tt('dialog.title')}</strong>
           <span className={css.dialogSubtitle}>{tt('dialog.subtitle')}</span>
         </div>
+
+        {hosts !== null && hosts.length > 0 && (
+          <div className={css.hostPicker}>
+            <div className={css.hostPickerTitle}>{tt('dialog.existing')}</div>
+            {hosts.map((host) => (
+              <div key={host.alias} className={css.hostRow}>
+                <span className={css.hostAlias}>{host.alias}</span>
+                <span className={css.hostMeta}>{host.user}@{host.host}:{host.port}</span>
+                <span className={css.hostRowActions}>
+                  <button
+                    type="button"
+                    className={`${css.button} ${css.buttonPrimary} ${css.hostEnter}`}
+                    disabled={picking === host.alias}
+                    onClick={() => void enterExisting(host.alias)}
+                  >
+                    {picking === host.alias ? tt('dialog.testing') : tt('dialog.enter')}
+                  </button>
+                  <button
+                    type="button"
+                    className={css.button}
+                    disabled={deleting === host.alias}
+                    onClick={() => startEdit(host)}
+                  >
+                    {tt('dialog.edit')}
+                  </button>
+                  <button
+                    type="button"
+                    className={`${css.button} ${css.danger}`}
+                    disabled={deleting === host.alias}
+                    onClick={() => void removeHost(host.alias)}
+                  >
+                    {deleting === host.alias ? '…' : tt('dialog.delete')}
+                  </button>
+                </span>
+              </div>
+            ))}
+            <div className={css.hostPickerDivider} />
+          </div>
+        )}
 
         <div className={css.dialogGrid}>
           <label className={css.field}>
@@ -184,7 +301,7 @@ export function ConfigDialog(props: {
             </button>
           ) : (
             <button type="button" className={`${css.button} ${css.buttonPrimary}`} onClick={() => void saveAndTest()} disabled={phase.kind === 'testing'}>
-              {phase.kind === 'testing' ? tt('dialog.testing') : tt('dialog.saveTest')}
+              {phase.kind === 'testing' ? tt('dialog.testing') : (editingAlias !== null ? tt('dialog.updateTest') : tt('dialog.saveTest'))}
             </button>
           )}
         </div>

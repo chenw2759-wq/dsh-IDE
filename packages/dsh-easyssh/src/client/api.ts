@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Browser-side API clients: the /api/dsh-easyssh route family plus the
  * two /api/dsh-ssh endpoints the config dialog needs (host create + test).
  * Plain fetch, same origin — the only data path the panel components use.
@@ -156,6 +156,27 @@ export class SshHostsApi {
     })
     const body = await readJson<{ host: SshHostSummary }>(response)
     return body.host
+  }
+
+  /** Update an existing host (PATCH /api/dsh-ssh/hosts?alias=…). The payload
+   *  may carry only the fields being changed; omitted auth keeps the stored
+   *  secret. */
+  async update(alias: string, payload: SshHostPayload): Promise<SshHostSummary> {
+    const response = await fetch(`${HOSTS_API}?alias=${encodeURIComponent(alias)}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    const body = await readJson<{ host: SshHostSummary }>(response)
+    return body.host
+  }
+
+  /** Delete a host (DELETE /api/dsh-ssh/hosts?alias=…). */
+  async remove(alias: string): Promise<void> {
+    const response = await fetch(`${HOSTS_API}?alias=${encodeURIComponent(alias)}`, {
+      method: 'DELETE',
+    })
+    await readJson<{ ok: true }>(response)
   }
 
   async test(alias: string): Promise<TestResult> {

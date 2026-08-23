@@ -1,0 +1,46 @@
+/** Session-header SSH buttons: rounded pill chrome (no emoji, text+icon). */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--aion-bg-3, rgba(128, 128, 128, 0.35));
+  border-radius: 9999px;
+  background: var(--aion-bg-1, rgba(128, 128, 128, 0.08));
+  color: var(--aion-text-secondary, #454d5f);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.button:hover {
+  background: var(--aion-bg-2, rgba(128, 128, 128, 0.14));
+  color: var(--aion-text-primary, #000);
+}
+
+.button:active {
+  background: var(--aion-bg-3, rgba(128, 128, 128, 0.2));
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--aion-primary, #165dff);
+  outline-offset: 2px;
+}
+
+/* Remote state: brand-tinted so the active SSH session reads at a glance. */
+.buttonRemote {
+  border-color: var(--aion-primary, #165dff);
+  background: color-mix(in srgb, var(--aion-primary, #165dff) 12%, transparent);
+  color: var(--aion-primary, #165dff);
+}
+
+.buttonRemote:hover {
+  background: color-mix(in srgb, var(--aion-primary, #165dff) 20%, transparent);
+}
+
+.buttonToggle {
+  border-style: dashed;
+}
