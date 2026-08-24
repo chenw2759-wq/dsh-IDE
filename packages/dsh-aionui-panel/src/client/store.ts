@@ -487,51 +487,22 @@ export function readExplorerUi(session: string, root: string): { expanded: strin
 const EMPTY_SEARCH = { query: '', status: 'idle' as const, hits: [], truncated: false }
 
 /**
- * True when a relative path is build/process noise that must NEVER auto-open:
- * dependency dirs, build outputs, temp/editor droppings, lockfiles. Logs are
- * deliberately NOT noise (log preview is a feature).
- */
-function isNoisePath(rel: string): boolean {
-  const parts = rel.split('/')
-  const NOISE_DIRS = new Set([
-    'node_modules', '.git', 'dist', 'build', 'out', 'lib', 'coverage', '__pycache__',
-    '.next', '.nuxt', '.cache', '.pytest_cache', '.mypy_cache', '.turbo',
-    '.idea', '.vscode', '.venv', 'venv', 'tmp', '.tmp',
-  ])
-  if (parts.some((part) => NOISE_DIRS.has(part))) return true
-  const base = (parts[parts.length - 1] ?? rel).toLowerCase()
-  if (base.endsWith('.map') || base.endsWith('.tsbuildinfo') || base.endsWith('.pyc')
-    || base.endsWith('.pyo') || base.endsWith('.class') || base.endsWith('.o')
-    || base.endsWith('.obj') || base.endsWith('.exe') || base.endsWith('.dll')
-    || base.endsWith('.so') || base.endsWith('.dylib') || base.endsWith('.tmp')
-    || base.endsWith('.temp') || base.endsWith('.swp') || base.endsWith('.swo')) return true
-  if (base === 'package-lock.json' || base === 'pnpm-lock.yaml' || base === 'yarn.lock'
-    || base === 'bun.lockb' || base === 'poetry.lock' || base === '.ds_store'
-    || base === 'thumbs.db') return true
-  if (base.startsWith('~$')) return true
-  return false
-}
-
-/**
  * Whether a changed path should AUTO-OPEN, given the per-directory watch
- * marks. Default watches only the FIRST level: files directly under the root
- * and files directly under a first-level directory. A marked directory
- * extends that — and EXPLICIT marks override the noise defaults (a user who
- * marks node_modules as deep really wants its files): 'shallow' watches its
- * direct children, 'deep' watches the whole subtree. Unmarked noise paths
- * never auto-open.
+ * marks. Only EXPLICIT marks auto-open — an unlit dot means "do not watch
+ * this directory", not "default first level". Walking the ancestor chain
+ * (direct parent → root): 'deep' on any ancestor opens the whole subtree;
+ * 'shallow' opens only files directly under the marked directory (the mark
+ * must sit on the direct parent). Unmarked paths never auto-open.
  */
 export function shouldAutoOpen(rel: string, watch: Record<string, 'shallow' | 'deep'>): boolean {
   const parts = rel.split('/').filter(Boolean)
-  // Explicit marks first: user intent wins over the noise/level defaults.
-  for (let i = parts.length - 2; i >= 1; i -= 1) {
+  for (let i = parts.length - 1; i >= 0; i -= 1) {
     const dir = parts.slice(0, i).join('/')
     const mark = watch[dir]
     if (mark === 'deep') return true
     if (mark === 'shallow' && i === parts.length - 1) return true
   }
-  if (isNoisePath(rel)) return false
-  return parts.length <= 2
+  return false
 }
 
 /** Create the explorer store (per-root persistence, debounced writes). */
