@@ -25,12 +25,17 @@ import { getSettingsStore, type SettingsStore } from './settings.ts'
  * sequential diff so the UI never stalls on huge files.
  */
 export function lineDiff(oldText: string, newText: string): Array<{ kind: 'same' | 'del' | 'add'; text: string }> {
+  // Normalize line endings first: a CRLF file edited/re-written as LF (or the
+  // reverse) is NOT a content change — without this every line would paint
+  // red+green and the whole file would look rewritten.
+  const oldNormalized = oldText.replace(/\r\n/g, '\n')
+  const newNormalized = newText.replace(/\r\n/g, '\n')
   // Brand-new baseline: an empty old text means every line is an addition —
   // a fresh-write file renders all-green with no stray deleted empty line.
-  if (oldText === '') return newText.split('\n').map((text) => ({ kind: 'add', text }))
-  if (newText === '') return oldText.split('\n').map((text) => ({ kind: 'del', text }))
-  const a = oldText.split('\n')
-  const b = newText.split('\n')
+  if (oldNormalized === '') return newNormalized.split('\n').map((text) => ({ kind: 'add' as const, text }))
+  if (newNormalized === '') return oldNormalized.split('\n').map((text) => ({ kind: 'del' as const, text }))
+  const a = oldNormalized.split('\n')
+  const b = newNormalized.split('\n')
   if (a.length * b.length > 200_000) {
     // Naive sequential diff: walk both lists, emitting runs.
     const out: Array<{ kind: 'same' | 'del' | 'add'; text: string }> = []

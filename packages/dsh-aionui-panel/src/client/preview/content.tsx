@@ -18,7 +18,7 @@ import { readSettings } from '../settings.ts'
 import { renderMarkdown, resolveMarkdownImage } from './markdown.ts'
 import { OfficeViewer } from './office.tsx'
 import { EditableOffice } from './office-editor.tsx'
-import { VisualEditor, boxesWrapHtml, boxesToMarkdown } from './visual-editor.tsx'
+import { VisualEditor } from './visual-editor.tsx'
 import previewCss from '../styles/preview.module.css'
 
 /** Escape text for safe injection into a <pre><code> highlight layer. */
@@ -265,11 +265,9 @@ function MarkdownViewer({
     return (
       <VisualEditor
         html={html}
-        onSave={(boxes) => {
-          // Markdown keeps markdown source: merge the edited boxes back into
-          // markdown text (bold survives; position/color are markdown-
-          // inexpressible). Then persist to disk once.
-          onContentChange(boxesToMarkdown(boxes))
+        contentType="markdown"
+        onSave={(editedHtml) => {
+          onContentChange(editedHtml)
           onSave()
         }}
       />
@@ -314,8 +312,9 @@ function HtmlViewer({
     return (
       <VisualEditor
         html={content}
-        onSave={(boxes) => {
-          onContentChange(boxesWrapHtml(content, boxes))
+        contentType="html"
+        onSave={(editedHtml) => {
+          onContentChange(editedHtml)
           onSave()
         }}
       />
@@ -511,7 +510,10 @@ function parseDiffRows(content: string): DiffRow[] {
   let oldNo = 0
   let newNo = 0
   for (const line of lines) {
-    if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('diff ') || line.startsWith('index ')) {
+    // File headers are `+++ b/x` / `--- a/x` — require the space so an ADDED
+    // content line that itself starts with `++` (e.g. `++x` in code) is not
+    // mistaken for a header and dropped from the red/green view.
+    if (line.startsWith('+++ ') || line.startsWith('--- ') || line.startsWith('diff ') || line.startsWith('index ')) {
       rows.push({ kind: 'meta', oldNo: null, newNo: null, text: line })
       continue
     }
@@ -563,13 +565,17 @@ function DiffViewer({
   let added = 0
   let removed = 0
   for (const line of lines) {
-    if (line.startsWith('+') && !line.startsWith('+++')) added += 1
-    else if (line.startsWith('-') && !line.startsWith('---')) removed += 1
+    if (line.startsWith('+') && !line.startsWith('+++ ')) added += 1
+    else if (line.startsWith('-') && !line.startsWith('--- ')) removed += 1
   }
   const rows = useMemo(() => parseDiffRows(content), [content])
   const showGutter = rows.some((row) => row.oldNo !== null || row.newNo !== null)
   const gutterWidth = showGutter ? 64 : 0
-  const [editorOpen, setEditorOpen] = useState(editContent !== undefined && added === 0 && removed > 0)
+  // Start in the diff view. A deletion-only card used to auto-open the
+  // editor (covering the red/green marks) — that hid exactly what the user
+  // wants to see when an external edit removed lines, so the editor is now an
+  // explicit action ("编辑最新版本") instead of an implicit takeover.
+  const [editorOpen, setEditorOpen] = useState(false)
   const editable = editContent !== undefined && onEdit !== undefined && onSaveEdit !== undefined
   // EDIT MODE: the editor COVERS the whole preview box (the diff view is
   // hidden behind it) — clicking edit must give you the full frame to type
