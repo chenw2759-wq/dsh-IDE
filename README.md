@@ -1,6 +1,9 @@
 # dsh-IDE — DSH Web GUI 一体化开发环境（JupyterLab 风格工作区 + SSH 远程开发）
 
+> **当前版本：v0.2.0**（Notebook 阅读与编辑 · 2026-08）— 完整版本历史见 [CHANGELOG.md](CHANGELOG.md)
+
 <p align="center">
+  <img src="https://img.shields.io/github/v/tag/chenw2759-wq/dsh-IDE?sort=semver&label=version&color=4d6bfe" alt="version">
   <img src="https://img.shields.io/badge/dsh-plugin-2ea44f" alt="dsh-plugin">
   <img src="https://img.shields.io/badge/node-%3E%3D22-339933" alt="node">
   <img src="https://img.shields.io/badge/license-BSD--3--Clause-blue" alt="license">
