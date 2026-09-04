@@ -2,9 +2,15 @@
 
 本文件记录 dsh-IDE 每个版本的变更。版本号遵循「主.次.修订」：次版本 = 新功能，修订 = 修复。
 
-## v0.2.0（开发中）— 工作区增强
+## v0.2.0 — Notebook 阅读与编辑 · 正式发布
 
-### 已完成（按实施阶段）
+右侧面板新增 **Jupyter Notebook（.ipynb）** 支持，并同步发布此版本全部累积修复（监视圆点语义 / SSH 主机编辑 / SFTP 稳定 / 红绿标注等，见下）。
+
+### 新功能（v0.2.0）
+
+- **Notebook（.ipynb）阅读与编辑**：文件树点击 `.ipynb` 直接在预览打开——像静态 notebook 一样结构化呈现（nbformat ≥ 4）：**Markdown cell 渲染**（复用 md 排版）、**代码 cell 高亮**（跟随 notebook 声明的语言，默认 python）+ **`In [n]` 执行计数**、**输出区**渲染（stream 文本、错误 traceback 红字、`text/plain` 结果、`image/png`/`jpeg` 图、`text/html`、`text/markdown`）。每个 cell 右上角「编辑」进入内联编辑（保存/取消，Ctrl/Cmd+Enter 快速保存），改完写回 `.ipynb` 的 `source`——**其余字段（outputs / metadata / nbformat / execution_count）原样保留**，换行风格与缩进也保留。不执行代码（无 kernel）；非法/非 notebook JSON 显示明确错误而非空白。新增 `tests/notebook.spec.ts`（parse / serialize 往返 / 渲染 smoke）。
+
+### 功能与修复汇总（v0.2.0）
 
 **修复（视觉编辑 / Word 编辑 / 斑马纹 / 会话隔离）**
 - **红绿标注（代码编辑器 edit-diff）三处 bug 修复**：① **CRLF 文件被 LF 重写时整文件误判红绿**——`lineDiff` 直接按行比较，CRLF（`\r\n`）与 LF（`\n`）的差异让每一行都判成「删+加」，整个文件看起来被重写（Windows + agent 写 LF 极易触发）。修复：diff 前统一把 `\r\n` 规范成 `\n`（换行风格不是内容变更），新增 `tests/line-diff.spec.ts`（5 用例）覆盖 CRLF/LF 混合、纯追加、中间行修改等。② **内容行以 `++`/`--` 开头会被误判成 diff 文件头**——`parseDiffRows`/统计用 `startsWith('+++')`/`startsWith('---')` 判 meta，新增内容若以 `++` 开头（如代码里的 `++x`）整行被当文件头丢掉、不计入红绿。修复：meta 判断要求第四字符是空格（`+++ ` / `--- `），diff 文件头才匹配。③ **纯删除的 diff 卡自动进入编辑模式盖住红绿视图**——`editorOpen` 初值原来是「无新增且只有删除就自动进编辑器」，外部只删了几行时红绿标注一弹就被编辑框盖住，用户看不到「删了什么」。修复：一律先显示红绿 diff，「编辑最新版本」改为显式按钮进入。

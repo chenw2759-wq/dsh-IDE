@@ -151,6 +151,7 @@ export type PreviewContentType =
   | 'markdown'
   | 'html'
   | 'code'
+  | 'notebook'
   | 'diff'
   | 'csv'
   | 'pdf'

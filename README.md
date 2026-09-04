@@ -11,7 +11,7 @@
 把 DeepSeek Harness（DSH）Web GUI 升级为**一体化开发环境**，四大核心能力：
 
 - 🖥️ **右侧边栏**：可停靠的右栏抽屉——文件树 + 预览/编辑同框；**拖 tab 拖出成浮窗，拖回右缘自动停靠**（下框 / 右栏 / 浮动 / 三栏 IDE 四态切换）
-- 📄 **预览**：Markdown / HTML / 图片 / CSV / Office（docx / xlsx / pptx）/ 日志等多格式直接预览
+- 📄 **预览**：Markdown / HTML / 图片 / CSV / **Notebook（.ipynb，结构化 cells + 输出渲染，可逐 cell 编辑）** / Office（docx / xlsx / pptx）/ 日志等多格式直接预览
 - ✏️ **编辑**：代码即时编辑（语法高亮 + 行号 + 斑马纹）+ Markdown/HTML **Word 式可视化编辑** + Office 框内富文本编辑
 - 🧩 **IDE**：文件树、命令行终端、Trae 风格红绿 diff、类型颜色标签、Git 角标、监视路径——开箱即用的 JupyterLab 式工作区
 
@@ -122,6 +122,11 @@ Added/removed 统计 + 删除行红底、新增行绿底；每个文件的每次
 
 `.R` / `.r` 脚本以 **Rscript** 运行（▶ 运行），R 标签用 R 官方蓝；`.Rmd`（R Markdown）识别为
 Markdown 可预览渲染；代码高亮原生支持 R。
+
+### 📓 Notebook（.ipynb 阅读与编辑）
+
+- 文件树点击 `.ipynb` 结构化呈现（nbformat ≥ 4）：Markdown cell 渲染、代码 cell 语法高亮 + `In [n]` 计数、输出区渲染（文本 / 错误 traceback / PNG·JPEG 图 / HTML / markdown）
+- 逐 cell「编辑」内联修改源码（Ctrl/Cmd+Enter 快速保存），保存只改 `source`，outputs / metadata / nbformat / execution_count 原样保留；不执行代码（无 kernel）
 
 ### 📄 Office 呈现（docx / xlsx / pptx 直接预览）
 

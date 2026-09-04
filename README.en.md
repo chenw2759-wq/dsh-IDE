@@ -14,7 +14,7 @@ capabilities:
 - 🖥️ **Right sidebar**: a dockable right-hand drawer — file tree + preview/editor in one pane; **drag a tab
   out into a floating window, drag it back to the right edge to auto-dock** (bottom / right drawer / float /
   triple-IDE)
-- 📄 **Preview**: Markdown / HTML / image / CSV / Office (docx / xlsx / pptx) / log rendered in place
+- 📄 **Preview**: Markdown / HTML / image / CSV / Notebook (.ipynb) / Office (docx / xlsx / pptx) / log rendered in place
 - ✏️ **Edit**: live code editing (syntax highlight + line numbers + zebra stripes) + Word-style visual
   editing for Markdown/HTML + in-frame rich-text Office editing
 - 🧩 **IDE**: file tree, terminal, Trae-style red/green diffs, type-colored tabs, Git badges, watch paths —
@@ -140,6 +140,11 @@ Log files (gray tab) preview directly in the panel.
 
 `.R` / `.r` scripts run with **Rscript** (▶ Run), R tabs use the official R blue; `.Rmd` (R Markdown)
 renders as Markdown; syntax highlighting supports R natively.
+
+### 📓 Notebook (.ipynb read & edit)
+
+- Opening an `.ipynb` renders it structurally (nbformat ≥ 4): markdown cells rendered, code cells syntax-highlighted with `In [n]` counts, outputs shown (text / error tracebacks / PNG·JPEG images / HTML / markdown)
+- Per-cell "Edit" edits the source inline (Ctrl/Cmd+Enter to save); saving rewrites only `source` — outputs / metadata / nbformat / execution_count are kept verbatim. No kernel: cells are not executed.
 
 ### 📄 Office Preview (docx / xlsx / pptx)
 

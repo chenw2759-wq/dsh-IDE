@@ -1710,3 +1710,185 @@ html[style*="color-scheme: light"] {
   font-size: 13px;
   pointer-events: none;
 }
+
+/* ── Jupyter Notebook (.ipynb) ─────────────────────────────────────────────── */
+.notebook {
+  padding: 10px 12px 24px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.notebookHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 2px 10px;
+  border-bottom: 1px solid var(--aion-bg-3, #e5e6eb);
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.notebookTitle {
+  font-weight: 700;
+  color: var(--aion-text-primary, #1f2329);
+}
+
+.notebookMeta {
+  font-size: 11px;
+  color: var(--aion-text-tertiary, #86909c);
+}
+
+.notebookHint {
+  font-size: 11px;
+  color: var(--aion-text-tertiary, #86909c);
+  margin-left: auto;
+}
+
+.notebookCell {
+  margin: 6px 0;
+  border: 1px solid var(--aion-bg-3, #e5e6eb);
+  border-left: 3px solid #94a3b8;
+  border-radius: 6px;
+  background: var(--aion-bg-1, #fff);
+}
+
+.notebookCellCode {
+  border-left-color: #f97316;
+}
+
+.notebookCellBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--aion-bg-3, #e5e6eb);
+  background: var(--aion-bg-2, #f7f8fa);
+  border-radius: 5px 5px 0 0;
+}
+
+.notebookBadge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--aion-text-secondary, #4e5969);
+}
+
+.notebookExec {
+  font-size: 11px;
+  color: var(--aion-primary, #165dff);
+  font-family: var(--aion-font-mono, ui-monospace, 'Cascadia Code', Consolas, monospace);
+}
+
+.notebookCellBarSpacer {
+  flex: 1;
+}
+
+.notebookBtn {
+  padding: 1px 8px;
+  border: 1px solid var(--aion-border-base, #e5e6eb);
+  border-radius: 5px;
+  background: var(--aion-bg-2, #f2f3f5);
+  color: var(--aion-text-primary, #1f2329);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.notebookBtnPrimary {
+  background: var(--aion-primary, #165dff);
+  border-color: var(--aion-primary, #165dff);
+  color: #fff;
+}
+
+.notebookCellTextarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 60px;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--aion-text-primary, #1f2329);
+  font-family: var(--aion-font-mono, ui-monospace, 'Cascadia Code', Consolas, monospace);
+  font-size: 12.5px;
+  line-height: 1.55;
+  resize: vertical;
+  outline: none;
+}
+
+/* Markdown cells reuse the .mdViewer typography (see below); this class only
+   overrides its container chrome so the card stays compact. */
+.notebookMarkdown {
+  padding: 6px 12px 8px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.notebookRaw {
+  margin: 0;
+  padding: 8px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--aion-font-mono, ui-monospace, 'Cascadia Code', Consolas, monospace);
+  font-size: 12.5px;
+}
+
+.notebookCodeWrap {
+  overflow-x: auto;
+}
+
+.notebookCode {
+  margin: 0;
+  padding: 8px 12px;
+  font-family: var(--aion-font-mono, ui-monospace, 'Cascadia Code', Consolas, monospace);
+  font-size: 12.5px;
+  line-height: 1.55;
+  background: var(--aion-bg-1, #fff);
+}
+
+.notebookCellEmpty {
+  padding: 6px 12px;
+  color: var(--aion-text-tertiary, #86909c);
+  font-size: 11px;
+}
+
+.notebookOutputs {
+  border-top: 1px dashed var(--aion-bg-3, #e5e6eb);
+  background: var(--aion-bg-2, #f7f8fa);
+  border-radius: 0 0 5px 5px;
+}
+
+.notebookOutput {
+  margin: 0;
+  padding: 6px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--aion-font-mono, ui-monospace, 'Cascadia Code', Consolas, monospace);
+  font-size: 12px;
+}
+
+.notebookOutputError {
+  margin: 0;
+  padding: 6px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--aion-font-mono, ui-monospace, 'Cascadia Code', Consolas, monospace);
+  font-size: 12px;
+  color: #d03050;
+}
+
+.notebookOutputImage {
+  max-width: 100%;
+  height: auto;
+  padding: 4px 12px;
+  display: block;
+}
+
+.notebookOutputHtml {
+  padding: 4px 12px;
+  overflow-x: auto;
+}
+
+.notebookFooter {
+  height: 12px;
+}

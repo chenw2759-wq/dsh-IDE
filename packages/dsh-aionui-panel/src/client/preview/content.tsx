@@ -18,6 +18,7 @@ import { readSettings } from '../settings.ts'
 import { renderMarkdown, resolveMarkdownImage } from './markdown.ts'
 import { OfficeViewer } from './office.tsx'
 import { EditableOffice } from './office-editor.tsx'
+import { NotebookTab } from './notebook.tsx'
 import { VisualEditor } from './visual-editor.tsx'
 import previewCss from '../styles/preview.module.css'
 
@@ -74,6 +75,8 @@ export function TabContent({
 
   const editable = tab.contentType === 'markdown' || tab.contentType === 'html'
     || tab.contentType === 'code' || tab.contentType === 'csv' || tab.contentType === 'text'
+  // Notebook has its own embedded cell editor (no split screen).
+  const notebook = tab.contentType === 'notebook'
 
   // Split screen: editable types only; editor | preview with a ratio handle.
   if (split && editable) {
@@ -111,6 +114,13 @@ export function TabContent({
           onContentChange={onContentChange}
           onSave={onSave}
           dirty={tab.dirty}
+        />
+      )}
+      {tab.contentType === 'notebook' && tab.content !== null && (
+        <NotebookTab
+          content={tab.content}
+          onContentChange={onContentChange}
+          onSave={onSave}
         />
       )}
       {(tab.contentType === 'code' || tab.contentType === 'text') && tab.content !== null && (

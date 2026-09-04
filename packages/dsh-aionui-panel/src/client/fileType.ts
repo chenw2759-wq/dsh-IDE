@@ -15,6 +15,8 @@ const HTML_EXT = new Set(['html', 'htm', 'xhtml'])
 const DIFF_EXT = new Set(['diff', 'patch'])
 /** CSV. */
 const CSV_EXT = new Set(['csv'])
+/** Jupyter notebooks. */
+const NOTEBOOK_EXT = new Set(['ipynb'])
 /** PDF. */
 const PDF_EXT = new Set(['pdf'])
 /** Office documents. */
@@ -72,6 +74,7 @@ export function detectContentType(name: string): PreviewContentType {
   if (HTML_EXT.has(ext)) return 'html'
   if (DIFF_EXT.has(ext)) return 'diff'
   if (CSV_EXT.has(ext)) return 'csv'
+  if (NOTEBOOK_EXT.has(ext)) return 'notebook'
   if (PDF_EXT.has(ext)) return 'pdf'
   if (WORD_EXT.has(ext)) return 'word'
   if (EXCEL_EXT.has(ext)) return 'excel'
@@ -94,6 +97,7 @@ export function typeColor(contentType: PreviewContentType, name?: string): strin
   if (contentType === 'image') return '#f59e0b' // orange: png/jpg/gif/webp
   if (contentType === 'csv') return '#22c55e' // green: data tables
   if (contentType === 'diff') return '#f43f5e' // red: change views
+  if (contentType === 'notebook') return '#f97316' // orange: Jupyter
   if (contentType === 'pdf') return '#ef4444'
   if (contentType === 'markdown') return '#06b6d4' // cyan: docs
   if (contentType === 'html') return '#fb923c'
